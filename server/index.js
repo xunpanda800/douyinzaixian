@@ -21,8 +21,25 @@ app.use((req, res, next) => {
 app.use(express.static(path.join(__dirname, '../public')))
 
 const API_HOST = 'dyapi.phpnbw.com'
-const POLL_MS = 30000
-const HISTORY_MAX = 500 // in-memory limit; DB stores all
+const POLL_MS = 35000
+const HISTORY_MAX = 500
+
+// Simple token-bucket rate limiter per host
+const rateLimiters = {}
+function rateLimit(host, maxPerSec = 3) {
+  if (!rateLimiters[host]) rateLimiters[host] = { tokens: maxPerSec, last: Date.now() }
+  const rl = rateLimiters[host]
+  return new Promise(resolve => {
+    const check = () => {
+      const now = Date.now()
+      rl.tokens = Math.min(maxPerSec, rl.tokens + (now - rl.last) * maxPerSec / 1000)
+      rl.last = now
+      if (rl.tokens >= 1) { rl.tokens--; resolve() }
+      else setTimeout(check, Math.ceil(1000 / maxPerSec))
+    }
+    check()
+  })
+}
 
 let rooms = new Map()
 
@@ -55,11 +72,15 @@ function apiGet(pathname, query) {
   })
 }
 
+function apiGetWithLimit(pathname, query) {
+  return rateLimit(API_HOST, 4).then(() => apiGet(pathname, query))
+}
+
 async function fetchViewerCount(webcastId) {
   // Try primary API with retries
   for (let i = 0; i <= 2; i++) {
     try {
-      const data = await apiGet('/get_live_room_num', {
+      const data = await apiGetWithLimit('/get_live_room_num', {
         webcast_id: webcastId, version: '187', platform: 'server'
       })
       const count = data?.data?.data?.data?.[0]?.room_view_stats?.display_value
@@ -88,7 +109,7 @@ async function fetchRoomInfo(webcastId, useFallback) {
   for (const source of useFallback ? ['dyapi', 'wtf'] : ['dyapi']) {
     try {
       const data = source === 'dyapi'
-        ? await apiGet('/api/douyin/web/fetch_user_live_videos', { webcast_id: webcastId, ...signParams() })
+        ? await apiGetWithLimit('/api/douyin/web/fetch_user_live_videos', { webcast_id: webcastId, ...signParams() })
         : await apiGetWtf('/api/douyin/web/fetch_user_live_videos', { webcast_id: webcastId })
       const d = data?.data?.data
       if (!d) continue
@@ -114,39 +135,43 @@ async function fetchRoomInfo(webcastId, useFallback) {
   return null
 }
 
+function processViewerResult(id, room, rawCount) {
+  const count = rawCount !== null ? parseInt(rawCount) : null
+  room.updated = Date.now()
+  if (room.offline_count === undefined) room.offline_count = 0
+  if (count !== null && count > 0) {
+    room.viewer_count = count
+    room.error = false
+    room.offline_count = 0
+    room.is_live = 1
+  } else if (count === 0 && room.offline_count < 5) {
+    room.error = false
+    room.offline_count++
+    if (room.offline_count >= 10) room.is_live = 0
+  } else {
+    if (count === null) room.error = true
+    room.offline_count++
+    if (room.offline_count >= 10) room.is_live = 0
+  }
+  if (count !== null) {
+    if (!room.history) room.history = []
+    const now = Date.now()
+    room.history.push({ time: now, count, like_count: room.like_count ?? 0, title: room.title || '' })
+    if (room.history.length > HISTORY_MAX) room.history.shift()
+    db.addHistory(id, now, count, room.like_count ?? 0, room.title || '')
+  }
+}
+
 async function poll() {
   const entries = [...rooms.entries()]
-  const CONCURRENCY = 10
+  const CONCURRENCY = 5
+  // Phase 1: viewer count — small batches with inter-batch delay
   for (let i = 0; i < entries.length; i += CONCURRENCY) {
     const batch = entries.slice(i, i + CONCURRENCY)
     await Promise.allSettled(batch.map(async ([id, room]) => {
       try {
         const rawCount = await fetchViewerCount(id)
-        const count = rawCount !== null ? parseInt(rawCount) : null
-        room.updated = Date.now()
-        if (room.offline_count === undefined) room.offline_count = 0
-        if (count !== null && count > 0) {
-          room.viewer_count = count
-          room.error = false
-          room.offline_count = 0
-          room.is_live = 1
-        } else if (count === 0 && room.offline_count < 5) {
-          // API says 0 but room was recently online — keep last good value
-          room.error = false
-          room.offline_count++
-          if (room.offline_count >= 10) room.is_live = 0
-        } else {
-          if (count === null) room.error = true
-          room.offline_count++
-          if (room.offline_count >= 10) room.is_live = 0
-        }
-        if (!room.history) room.history = []
-        if (count !== null) {
-          const now = Date.now()
-          room.history.push({ time: now, count, like_count: room.like_count ?? 0, title: room.title || '' })
-          if (room.history.length > HISTORY_MAX) room.history.shift()
-          db.addHistory(id, now, count, room.like_count ?? 0, room.title || '')
-        }
+        processViewerResult(id, room, rawCount)
       } catch {
         room.error = true
         room.updated = Date.now()
@@ -156,27 +181,37 @@ async function poll() {
         if (room.offline_count >= 10) room.is_live = 0
       }
     }))
+    if (i + CONCURRENCY < entries.length) await new Promise(r => setTimeout(r, 2000))
   }
-  // Fetch room info for all rooms — also fills in viewer_count gaps
-  for (const [id, room] of rooms) {
-    const needsFallback = !room.viewer_count || room.viewer_count <= 0
-    fetchRoomInfo(id, needsFallback).then(info => {
-      if (!info) return
-      if (info.like_count !== undefined) room.like_count = info.like_count
-      if (info.title) room.title = info.title
-      if (info.nickname) room.nickname = info.nickname
-      if (info.avatar) room.avatar = info.avatar
-      if (info.room_id) room.room_id = info.room_id
-      if (info.sec_uid) room.sec_uid = info.sec_uid
-      if (info.viewer_count !== null && info.viewer_count > 0 && needsFallback) {
-        room.viewer_count = info.viewer_count
-        if (room.offline_count === undefined) room.offline_count = 0
-        room.offline_count = 0
-        room.is_live = 1
-      }
-      db.updateRoom(id, room)
-      db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
-    })
+  // Phase 2: room info — only for rooms needing refresh, 2 at a time with delay
+  const now = Date.now()
+  const needInfo = entries.filter(([id, room]) => {
+    return !room.viewer_count || room.viewer_count <= 0 || !room._infoFetched || (now - (room._infoFetched || 0)) > 300000
+  })
+  for (let i = 0; i < needInfo.length; i += 2) {
+    await Promise.allSettled(needInfo.slice(i, i + 2).map(async ([id, room]) => {
+      try {
+        const needsFallback = !room.viewer_count || room.viewer_count <= 0
+        const info = await fetchRoomInfo(id, needsFallback)
+        if (!info) return
+        room._infoFetched = Date.now()
+        if (info.like_count !== undefined) room.like_count = info.like_count
+        if (info.title) room.title = info.title
+        if (info.nickname) room.nickname = info.nickname
+        if (info.avatar) room.avatar = info.avatar
+        if (info.room_id) room.room_id = info.room_id
+        if (info.sec_uid) room.sec_uid = info.sec_uid
+        if (info.viewer_count !== null && info.viewer_count > 0 && needsFallback) {
+          room.viewer_count = info.viewer_count
+          if (room.offline_count === undefined) room.offline_count = 0
+          room.offline_count = 0
+          room.is_live = 1
+        }
+        db.updateRoom(id, room)
+        db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
+      } catch {}
+    }))
+    if (i + 2 < needInfo.length) await new Promise(r => setTimeout(r, 1000))
   }
   broadcast()
 }
