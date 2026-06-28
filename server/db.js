@@ -143,7 +143,7 @@ function saveSession(roomId, startTime, endTime, peakViewers, totalViewers) {
 }
 
 function loadSessions(roomId) {
-  const rows = db.exec("SELECT * FROM sessions WHERE room_id=? ORDER BY start_time DESC LIMIT 30", [roomId])
+  const rows = db.exec("SELECT * FROM sessions WHERE room_id=? ORDER BY start_time DESC", [roomId])
   if (!rows.length) return []
   const cols = rows[0].columns
   return rows[0].values.map(v => {
