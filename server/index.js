@@ -2,6 +2,7 @@ const express = require('express')
 const http = require('http')
 const https = require('https')
 const path = require('path')
+const fs = require('fs')
 const crypto = require('crypto')
 const { exec } = require('child_process')
 const { WebSocketServer } = require('ws')
@@ -377,6 +378,13 @@ app.delete('/api/room/:id', (req, res) => {
   rooms.delete(req.params.id)
   db.removeRoom(req.params.id)
   broadcast(); res.json({ ok: true })
+})
+
+app.get('/api/system/version', (req, res) => {
+  try {
+    const v = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8'))
+    res.json(v)
+  } catch { res.json({ version: 'unknown' }) }
 })
 
 app.post('/api/system/update', (req, res) => {

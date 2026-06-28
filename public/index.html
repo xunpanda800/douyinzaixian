@@ -496,6 +496,7 @@ tr:hover .t-drag { opacity: .7; }
     </div>
     <div class="header-stats" id="statsBar"></div>
     <div style="display:flex;align-items:center;gap:4px;">
+      <span id="versionBadge" style="font-family:var(--mono);font-size:9px;color:var(--muted);background:#ede6dd;padding:2px 6px;border-radius:3px;"></span>
       <button class="btn btn-outline" onclick="systemUpdate()" style="font-size:10px;padding:3px 8px;" id="updateBtn">⬆ 更新</button>
     </div>
     <div class="connection">
@@ -582,6 +583,10 @@ let ws, rooms = [], activeRoomId = null, trendChart = null, historyChart = null
 let prevViewers = {}
 let currentPage = 1, pageSize = 20, dragId = null
 let sortMode = 'manual' // 'manual' | 'viewers'
+
+fetch('/api/system/version').then(r=>r.json()).then(d=>{
+  document.getElementById('versionBadge').textContent = d.version === 'dev' ? 'dev' : '#' + d.version.slice(0, 7)
+}).catch(()=>{document.getElementById('versionBadge').textContent = '?'})
 
 function connect() {
   ws = new WebSocket(wsUrl)
