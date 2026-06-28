@@ -122,9 +122,7 @@ async function poll() {
         if (info.avatar) room.avatar = info.avatar
         if (info.room_id) room.room_id = info.room_id
         if (info.sec_uid) room.sec_uid = info.sec_uid
-        if (info.viewer_count !== null) room.viewer_count = info.viewer_count
         db.updateRoom(id, room)
-        // Update the latest history entry with fetched values
         db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
       })
     } catch {
@@ -170,7 +168,6 @@ async function addRoom(input) {
     if (info.like_count !== undefined) room.like_count = info.like_count
     if (info.follower_count !== undefined) room.follower_count = info.follower_count
     if (info.sec_uid) room.sec_uid = info.sec_uid
-    if (info.viewer_count !== null && info.viewer_count !== undefined) room.viewer_count = info.viewer_count
     db.updateRoom(id, room)
   }
 
