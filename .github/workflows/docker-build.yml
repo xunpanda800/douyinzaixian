@@ -35,4 +35,6 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: ghcr.io/${{ github.repository }}:latest
-          build-args: COMMIT_SHA=${{ github.sha }}
+          build-args: |
+            COMMIT_SHA=${{ github.sha }}
+            VERSION=1.0.${{ github.run_number }}

@@ -585,7 +585,7 @@ let currentPage = 1, pageSize = 20, dragId = null
 let sortMode = 'manual' // 'manual' | 'viewers'
 
 fetch('/api/system/version').then(r=>r.json()).then(d=>{
-  document.getElementById('versionBadge').textContent = d.version === 'dev' ? 'dev' : '#' + d.version.slice(0, 7)
+  document.getElementById('versionBadge').textContent = d.version || '?'
 }).catch(()=>{document.getElementById('versionBadge').textContent = '?'})
 
 function connect() {
