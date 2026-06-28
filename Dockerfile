@@ -19,4 +19,5 @@ RUN mkdir -p data
 
 EXPOSE 3000
 
+USER root
 CMD ["node", "server/index.js"]
