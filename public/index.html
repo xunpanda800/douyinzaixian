@@ -1136,6 +1136,7 @@ function renderAnalytics(body, d, r) {
       <h4>⚡ 变化量</h4>
       <div class="ana-row">
         ${Object.entries(d.deltas).map(([k, v]) => {
+          if (v == null) return `<div class="ana-card" style="flex:1"><div class="lbl">近 ${k}</div><div class="val stable">—</div></div>`
           const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'stable'
           const sign = v > 0 ? '+' : ''
           return `<div class="ana-card" style="flex:1"><div class="lbl">近 ${k}</div><div class="val ${cls}">${sign}${fmt(v)}</div></div>`
