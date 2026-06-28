@@ -13,6 +13,8 @@ COPY public/ ./public/
 COPY version.json ./
 RUN node -e "const v=require('./version.json'); v.version='$VERSION'; v.commit='$COMMIT_SHA'; require('fs').writeFileSync('version.json',JSON.stringify(v))"
 
+RUN apk add --no-cache git
+
 RUN mkdir -p data
 
 EXPOSE 3000
