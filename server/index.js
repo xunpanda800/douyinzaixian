@@ -62,7 +62,8 @@ async function fetchViewerCount(webcastId, retries = 2) {
       const data = await apiGet('/get_live_room_num', {
         webcast_id: webcastId, version: '187', platform: 'server'
       })
-      return data?.data?.data?.data?.[0]?.room_view_stats?.display_value ?? null
+      const count = data?.data?.data?.data?.[0]?.room_view_stats?.display_value
+      if (count !== null && count !== undefined) return count
     } catch (e) {
       if (i < retries) {
         await new Promise(r => setTimeout(r, 1000 * (i + 1)))
@@ -71,6 +72,7 @@ async function fetchViewerCount(webcastId, retries = 2) {
       }
     }
   }
+  return null
 }
 
 const md5 = s => crypto.createHash('md5').update(s).digest('hex')
@@ -146,9 +148,10 @@ async function poll() {
       }
     }))
   }
-  // Fetch like_count, title, avatar asynchronously for all rooms
+  // Fetch room info for all rooms (with fallback only if viewer count fetch failed)
   for (const [id, room] of rooms) {
-    fetchRoomInfo(id, false).then(info => {
+    const needsFallback = room.viewer_count === null || room.viewer_count === undefined
+    fetchRoomInfo(id, needsFallback).then(info => {
       if (!info) return
       if (info.like_count !== undefined) room.like_count = info.like_count
       if (info.title) room.title = info.title
@@ -156,6 +159,7 @@ async function poll() {
       if (info.avatar) room.avatar = info.avatar
       if (info.room_id) room.room_id = info.room_id
       if (info.sec_uid) room.sec_uid = info.sec_uid
+      if (info.viewer_count !== null && needsFallback) room.viewer_count = info.viewer_count
       db.updateRoom(id, room)
       db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
     })
