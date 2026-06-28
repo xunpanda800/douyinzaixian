@@ -3,7 +3,7 @@ FROM node:22-alpine
 ARG COMMIT_SHA=dev
 ARG VERSION=dev
 
-RUN apk add --no-cache docker-cli
+RUN apk add --no-cache docker-cli docker-cli-compose
 
 WORKDIR /app
 
