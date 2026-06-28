@@ -719,6 +719,7 @@ function renderGrid() {
       <td><div class="t-actions">
         <button onclick="event.stopPropagation();togglePin('${r.id}')" style="${r.pinned ? 'color:var(--primary)' : ''}">📌</button>
         <button onclick="event.stopPropagation();startEdit('${r.id}')">✏️</button>
+        <button onclick="event.stopPropagation();refreshRoom('${r.id}')">↻</button>
         <button onclick="event.stopPropagation();openGift('${r.id}')">🎁</button>
         <button onclick="event.stopPropagation();openHistory('${r.id}')">📈</button>
         <button onclick="event.stopPropagation();openAnalytics('${r.id}')">📊</button>
@@ -848,6 +849,7 @@ function renderDetail(r) {
     <div class="detail-metric"><div class="label">👥 粉丝</div><div class="value fans">${fmt(r.follower_count)}</div></div>
   `
   document.getElementById('detailActions').innerHTML = `
+    <button class="btn btn-outline" onclick="refreshRoom('${r.id}')">↻ 刷新</button>
     <button class="btn btn-outline" onclick="openGift('${r.id}')">🎁 礼物榜单</button>
     <button class="btn btn-outline" onclick="openHistory('${r.id}')">📈 历史趋势</button>
   `
@@ -894,6 +896,10 @@ function renderTrendChart(r) {
     }]
   }, true)
   trendChart.resize()
+}
+
+function refreshRoom(id) {
+  fetch(`/api/room/refresh/${id}`, { method: 'POST' }).catch(() => {})
 }
 
 function removeRoom(id) {

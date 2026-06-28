@@ -326,6 +326,25 @@ app.post('/api/room/reorder', (req, res) => {
   res.json({ ok: true })
 })
 
+app.post('/api/room/refresh/:id', async (req, res) => {
+  const room = rooms.get(req.params.id)
+  if (!room) return res.status(404).json({ error: 'not found' })
+  const info = await fetchRoomInfo(req.params.id, true)
+  if (info) {
+    if (info.nickname) room.nickname = info.nickname
+    if (info.avatar) room.avatar = info.avatar
+    if (info.title) room.title = info.title
+    if (info.room_status !== undefined) room.room_status = info.room_status
+    if (info.room_id) room.room_id = info.room_id
+    if (info.like_count !== undefined) room.like_count = info.like_count
+    if (info.follower_count !== undefined) room.follower_count = info.follower_count
+    if (info.sec_uid) room.sec_uid = info.sec_uid
+    db.updateRoom(req.params.id, room)
+  }
+  broadcast()
+  res.json({ ok: true, updated: !!info })
+})
+
 app.delete('/api/room/:id', (req, res) => {
   rooms.delete(req.params.id)
   db.removeRoom(req.params.id)
