@@ -495,6 +495,9 @@ tr:hover .t-drag { opacity: .7; }
       <button class="btn btn-primary" id="addBtn">添加</button>
     </div>
     <div class="header-stats" id="statsBar"></div>
+    <div style="display:flex;align-items:center;gap:4px;">
+      <button class="btn btn-outline" onclick="systemUpdate()" style="font-size:10px;padding:3px 8px;" id="updateBtn">⬆ 更新</button>
+    </div>
     <div class="connection">
       <span class="dot connecting" id="wsDot"></span>
       <span id="wsLabel">连接中</span>
@@ -900,6 +903,17 @@ function renderTrendChart(r) {
 
 function refreshRoom(id) {
   fetch(`/api/room/refresh/${id}`, { method: 'POST' }).catch(() => {})
+}
+
+function systemUpdate() {
+  const btn = document.getElementById('updateBtn')
+  btn.disabled = true; btn.textContent = '⏳ 更新中...'
+  fetch('/api/system/update', { method: 'POST' }).then(r => r.json()).then(d => {
+    btn.textContent = '✅ 重启中...'
+    setTimeout(() => location.reload(), 3000)
+  }).catch(() => {
+    btn.disabled = false; btn.textContent = '⬆ 更新'
+  })
 }
 
 function removeRoom(id) {

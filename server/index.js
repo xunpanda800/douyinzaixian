@@ -3,6 +3,7 @@ const http = require('http')
 const https = require('https')
 const path = require('path')
 const crypto = require('crypto')
+const { exec } = require('child_process')
 const { WebSocketServer } = require('ws')
 const db = require('./db')
 
@@ -349,6 +350,19 @@ app.delete('/api/room/:id', (req, res) => {
   rooms.delete(req.params.id)
   db.removeRoom(req.params.id)
   broadcast(); res.json({ ok: true })
+})
+
+app.post('/api/system/update', (req, res) => {
+  res.json({ ok: true, message: '正在拉取新镜像...' })
+  exec('docker pull ghcr.io/xunpanda800/douyinzaixian:latest', { timeout: 180000 }, (err, stdout, stderr) => {
+    if (err) return console.log('update pull error:', stderr)
+    console.log('update pull:', stdout)
+    setTimeout(() => {
+      exec('docker compose -f /app/docker-compose.yml up -d', { timeout: 30000 }, (e, o, s) => {
+        console.log('update restart:', e ? s : o)
+      })
+    }, 500)
+  })
 })
 
 wss.on('connection', (ws) => {
