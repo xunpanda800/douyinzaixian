@@ -38,9 +38,22 @@ async function init() {
     viewer_count INTEGER,
     pinned INTEGER NOT NULL DEFAULT 0,
     created_at INTEGER NOT NULL,
-    updated_at INTEGER NOT NULL
+    updated_at INTEGER NOT NULL,
+    total_viewers INTEGER DEFAULT 0
   )`)
   try { db.run("ALTER TABLE rooms ADD COLUMN pinned INTEGER NOT NULL DEFAULT 0") } catch (e) {}
+  try { db.run("ALTER TABLE rooms ADD COLUMN total_viewers INTEGER DEFAULT 0") } catch (e) {}
+  db.run(`CREATE TABLE IF NOT EXISTS sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    room_id TEXT NOT NULL,
+    start_time INTEGER NOT NULL,
+    end_time INTEGER,
+    peak_viewers INTEGER DEFAULT 0,
+    total_viewers INTEGER DEFAULT 0,
+    duration_minutes INTEGER DEFAULT 0
+  )`)
+  db.run(`CREATE INDEX IF NOT EXISTS idx_sessions_room ON sessions(room_id, start_time)`)
+  try { db.run("ALTER TABLE sessions ADD COLUMN total_viewers INTEGER DEFAULT 0") } catch (e) {}
   db.run(`CREATE TABLE IF NOT EXISTS history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     room_id TEXT NOT NULL,
@@ -122,4 +135,22 @@ function updateLatestHistory(roomId, likeCount, title) {
   } catch (e) {}
 }
 
-module.exports = { init, loadRooms, loadHistory, insertRoom, updateRoom, removeRoom, addHistory, updateLatestHistory }
+function saveSession(roomId, startTime, endTime, peakViewers, totalViewers) {
+  const dur = Math.round((endTime - startTime) / 60000)
+  db.run("INSERT INTO sessions (room_id, start_time, end_time, peak_viewers, total_viewers, duration_minutes) VALUES (?, ?, ?, ?, ?, ?)",
+    [roomId, startTime, endTime, peakViewers || 0, totalViewers || 0, dur])
+  save()
+}
+
+function loadSessions(roomId) {
+  const rows = db.exec("SELECT * FROM sessions WHERE room_id=? ORDER BY start_time DESC LIMIT 30", [roomId])
+  if (!rows.length) return []
+  const cols = rows[0].columns
+  return rows[0].values.map(v => {
+    const r = {}
+    cols.forEach((c, i) => { r[c] = v[i] })
+    return r
+  })
+}
+
+module.exports = { init, loadRooms, loadHistory, insertRoom, updateRoom, removeRoom, addHistory, updateLatestHistory, saveSession, loadSessions }

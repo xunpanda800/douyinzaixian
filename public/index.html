@@ -563,6 +563,19 @@ tr:hover .t-drag { opacity: .7; }
   </div>
 </div>
 
+<!-- Sessions dialog -->
+<div class="overlay" id="sessionsDialog">
+  <div class="panel dialog-history" style="max-width:700px;">
+    <div class="panel-header">
+      <h3 style="font-weight:600;font-size:14px;flex:1;">🎬 场次记录 <span id="sessionsRoomLabel" style="font-size:11px;color:var(--muted);font-weight:400;"></span></h3>
+      <div style="display:flex;gap:4px;">
+        <button class="close-btn" onclick="closeSessions()">✕</button>
+      </div>
+    </div>
+    <div class="panel-body" id="sessionsBody"><div class="state-box loading"><div class="icon">🎬</div><h3>加载中...</h3></div></div>
+  </div>
+</div>
+
 <!-- Analytics dialog -->
 <div class="overlay" id="analyticsDialog">
   <div class="panel dialog-history" style="max-width:820px;">
@@ -867,11 +880,13 @@ function renderDetail(r) {
     <div class="detail-metric"><div class="label">👁 在线人数</div><div class="value ${live ? 'online' : 'offline'}">${fmt(r.viewer_count)}${viewerDelta(r)}</div></div>
     <div class="detail-metric"><div class="label">❤️ 点赞</div><div class="value likes">${fmt(r.like_count)}</div></div>
     <div class="detail-metric"><div class="label">👥 粉丝</div><div class="value fans">${fmt(r.follower_count)}</div></div>
+    <div class="detail-metric"><div class="label">🎬 累积场观</div><div class="value fans">${r.total_viewers ? fmt(r.total_viewers) : '—'}</div></div>
   `
   document.getElementById('detailActions').innerHTML = `
     <button class="btn btn-outline" onclick="refreshRoom('${r.id}')">↻ 刷新</button>
     <button class="btn btn-outline" onclick="openGift('${r.id}')">🎁 礼物榜单</button>
     <button class="btn btn-outline" onclick="openHistory('${r.id}')">📈 历史趋势</button>
+    <button class="btn btn-outline" onclick="openSessions('${r.id}')">🎬 场次记录</button>
   `
   document.getElementById('historyCount').textContent = `${(r.history || []).length} 个数据点`
   renderTrendChart(r)
@@ -1150,7 +1165,7 @@ function renderHistoryChart() {
 
 function closeHistory() { document.getElementById('historyDialog').classList.remove('open') }
 
-let currentAnalyticsRoomId = null
+let currentAnalyticsRoomId = null, currentSessionsRoomId = null
 
 async function openAnalytics(roomId) {
   currentAnalyticsRoomId = roomId
@@ -1236,10 +1251,56 @@ function closeAnalytics() {
   currentAnalyticsRoomId = null
 }
 
+async function openSessions(roomId) {
+  currentSessionsRoomId = roomId
+  const r = rooms.find(x => x.id === roomId)
+  const label = document.getElementById('sessionsRoomLabel')
+  if (label) label.textContent = r && r.nickname ? `· ${r.nickname}` : ''
+  document.getElementById('sessionsDialog').classList.add('open')
+  const body = document.getElementById('sessionsBody')
+  body.innerHTML = `<div class="state-box loading"><div class="icon">🎬</div><h3>加载中...</h3></div>`
+  try {
+    const res = await fetch(`/api/room/sessions/${roomId}`)
+    const sessions = await res.json()
+    if (!sessions.length) {
+      body.innerHTML = `<div class="state-box"><div class="icon">🎬</div><h3>暂无场次记录</h3><p>直播结束后自动记录</p></div>`
+      return
+    }
+    body.innerHTML = `<div style="padding:4px 0"><table style="width:100%;border-collapse:collapse;font-size:13px">
+      <tr style="color:var(--muted);font-size:11px">
+        <th style="text-align:left;padding:6px 8px;border-bottom:1px solid var(--border)">日期</th>
+        <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border)">场观</th>
+        <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border)">峰值</th>
+        <th style="text-align:right;padding:6px 8px;border-bottom:1px solid var(--border)">时长</th>
+      </tr>
+      ${sessions.map(s => {
+        const start = new Date(s.start_time)
+        const dateStr = start.toLocaleDateString()
+        const timeStr = start.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        const dur = s.duration_minutes >= 60 ? (s.duration_minutes/60).toFixed(1)+'h' : s.duration_minutes+'m'
+        return `<tr>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap">${dateStr} ${timeStr}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;font-family:'JetBrains Mono',monospace">${(s.total_viewers || 0).toLocaleString()}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;font-family:'JetBrains Mono',monospace;color:var(--coral)">${(s.peak_viewers || 0).toLocaleString()}</td>
+          <td style="padding:6px 8px;border-bottom:1px solid var(--border);text-align:right;color:var(--muted)">${dur}</td>
+        </tr>`
+      }).join('')}
+    </table></div>`
+  } catch {
+    body.innerHTML = `<div class="state-box"><div class="icon" style="background:rgba(239,68,68,0.1);color:var(--red);">⚠️</div><h3 style="color:var(--red);">获取失败</h3></div>`
+  }
+}
+
+function closeSessions() {
+  document.getElementById('sessionsDialog').classList.remove('open')
+  currentSessionsRoomId = null
+}
+
 window.addEventListener('resize', () => { if (trendChart) trendChart.resize(); if (historyChart) historyChart.resize() })
 document.getElementById('giftDialog').onclick = e => { if (e.target === e.currentTarget) closeGift() }
 document.getElementById('historyDialog').onclick = e => { if (e.target === e.currentTarget) closeHistory() }
 document.getElementById('analyticsDialog').onclick = e => { if (e.target === e.currentTarget) closeAnalytics() }
+document.getElementById('sessionsDialog').onclick = e => { if (e.target === e.currentTarget) closeSessions() }
 
 connect()
 </script>

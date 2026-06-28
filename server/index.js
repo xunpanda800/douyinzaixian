@@ -116,6 +116,7 @@ async function fetchRoomInfo(webcastId, useFallback) {
       const stream = (d.data || [])[0] || {}
       const owner = stream.owner || {}
       const user = d.user || {}
+      const totalViewers = stream.user_count_str ? parseInt(stream.user_count_str) : null
       return {
         room_status: d.room_status ?? 0,
         nickname: user.nickname || owner.nickname || '',
@@ -126,6 +127,7 @@ async function fetchRoomInfo(webcastId, useFallback) {
         sec_uid: user.sec_uid || owner.sec_uid || '',
         follower_count: null,
         viewer_count: stream.room_view_stats?.display_value ?? null,
+        total_viewers: totalViewers,
         webcast_id: webcastId,
       }
     } catch (e) {
@@ -183,6 +185,18 @@ async function poll() {
     }))
     if (i + CONCURRENCY < entries.length) await new Promise(r => setTimeout(r, 2000))
   }
+  // Track sessions: detect end of a live stream
+  for (const [id, room] of rooms) {
+    const justWentOff = room._wasLive && !room.is_live
+    if (justWentOff && room._sessionStart) {
+      const peakCounts = room.history ? room.history.filter(h => h.count > 0).map(h => h.count) : []
+      const peak = peakCounts.length ? Math.max(...peakCounts) : 0
+      db.saveSession(id, room._sessionStart, Date.now(), peak, room.total_viewers || 0)
+      room._sessionStart = null
+    }
+    if (room.is_live && !room._sessionStart) room._sessionStart = Date.now()
+    room._wasLive = !!room.is_live
+  }
   // Phase 2: room info — only for rooms needing refresh, 2 at a time with delay
   const now = Date.now()
   const needInfo = entries.filter(([id, room]) => {
@@ -207,6 +221,9 @@ async function poll() {
           room.offline_count = 0
           room.is_live = 1
         }
+        if (info.total_viewers !== null && info.total_viewers > 0) {
+          room.total_viewers = info.total_viewers
+        }
         db.updateRoom(id, room)
         db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
       } catch {}
@@ -225,6 +242,7 @@ function broadcast() {
     sec_uid: r.sec_uid || '', error: r.error, updated: r.updated,
     history: (r.history || []).slice(-60), pinned: r.pinned || 0,
     is_live: r.is_live ?? 0,
+    total_viewers: r.total_viewers ?? null,
   }))
   wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ rooms: list })) })
 }
@@ -443,6 +461,10 @@ app.get('/api/system/version', (req, res) => {
     const v = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8'))
     res.json(v)
   } catch { res.json({ version: 'unknown' }) }
+})
+
+app.get('/api/room/sessions/:id', (req, res) => {
+  res.json(db.loadSessions(req.params.id))
 })
 
 const { execSync } = require('child_process')
