@@ -111,46 +111,53 @@ async function fetchRoomInfo(webcastId, useFallback) {
 }
 
 async function poll() {
-  for (const [id, room] of rooms) {
-    try {
-      const count = await fetchViewerCount(id)
-      room.viewer_count = count
-      room.error = false
-      room.updated = Date.now()
-      if (room.offline_count === undefined) room.offline_count = 0
-      if (count !== null && parseInt(count) > 0) {
-        room.offline_count = 0
-        room.is_live = 1
-      } else {
+  const entries = [...rooms.entries()]
+  const CONCURRENCY = 10
+  for (let i = 0; i < entries.length; i += CONCURRENCY) {
+    const batch = entries.slice(i, i + CONCURRENCY)
+    await Promise.allSettled(batch.map(async ([id, room]) => {
+      try {
+        const count = await fetchViewerCount(id)
+        room.viewer_count = count
+        room.error = false
+        room.updated = Date.now()
+        if (room.offline_count === undefined) room.offline_count = 0
+        if (count !== null && parseInt(count) > 0) {
+          room.offline_count = 0
+          room.is_live = 1
+        } else {
+          room.offline_count++
+          if (room.offline_count >= 10) room.is_live = 0
+        }
+        if (!room.history) room.history = []
+        if (count !== null) {
+          const now = Date.now()
+          room.history.push({ time: now, count, like_count: room.like_count ?? 0, title: room.title || '' })
+          if (room.history.length > HISTORY_MAX) room.history.shift()
+          db.addHistory(id, now, parseInt(count) || 0, room.like_count ?? 0, room.title || '')
+        }
+      } catch {
+        room.error = true
+        room.updated = Date.now()
+        if (room.offline_count === undefined) room.offline_count = 0
         room.offline_count++
         if (room.offline_count >= 10) room.is_live = 0
       }
-      if (!room.history) room.history = []
-      if (count !== null) {
-        const now = Date.now()
-        room.history.push({ time: now, count, like_count: room.like_count ?? 0, title: room.title || '' })
-        if (room.history.length > HISTORY_MAX) room.history.shift()
-        db.addHistory(id, now, parseInt(count) || 0, room.like_count ?? 0, room.title || '')
-      }
-      // Fetch like_count, title, avatar asynchronously (don't block)
-      fetchRoomInfo(id, false).then(info => {
-        if (!info) return
-        if (info.like_count !== undefined) room.like_count = info.like_count
-        if (info.title) room.title = info.title
-        if (info.nickname) room.nickname = info.nickname
-        if (info.avatar) room.avatar = info.avatar
-        if (info.room_id) room.room_id = info.room_id
-        if (info.sec_uid) room.sec_uid = info.sec_uid
-        db.updateRoom(id, room)
-        db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
-      })
-    } catch {
-      room.error = true
-      room.updated = Date.now()
-      if (room.offline_count === undefined) room.offline_count = 0
-      room.offline_count++
-      if (room.offline_count >= 10) room.is_live = 0
-    }
+    }))
+  }
+  // Fetch like_count, title, avatar asynchronously for all rooms
+  for (const [id, room] of rooms) {
+    fetchRoomInfo(id, false).then(info => {
+      if (!info) return
+      if (info.like_count !== undefined) room.like_count = info.like_count
+      if (info.title) room.title = info.title
+      if (info.nickname) room.nickname = info.nickname
+      if (info.avatar) room.avatar = info.avatar
+      if (info.room_id) room.room_id = info.room_id
+      if (info.sec_uid) room.sec_uid = info.sec_uid
+      db.updateRoom(id, room)
+      db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
+    })
   }
   broadcast()
 }
