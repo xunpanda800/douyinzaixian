@@ -107,7 +107,14 @@ async function poll() {
       room.viewer_count = count
       room.error = false
       room.updated = Date.now()
-      room.is_live = count !== null && parseInt(count) > 0 ? 1 : 0
+      if (room.offline_count === undefined) room.offline_count = 0
+      if (count !== null && parseInt(count) > 0) {
+        room.offline_count = 0
+        room.is_live = 1
+      } else {
+        room.offline_count++
+        if (room.offline_count >= 10) room.is_live = 0
+      }
       if (!room.history) room.history = []
       if (count !== null) {
         const now = Date.now()
@@ -130,6 +137,9 @@ async function poll() {
     } catch {
       room.error = true
       room.updated = Date.now()
+      if (room.offline_count === undefined) room.offline_count = 0
+      room.offline_count++
+      if (room.offline_count >= 10) room.is_live = 0
     }
   }
   broadcast()

@@ -602,7 +602,7 @@ function connect() {
       const old = rooms[i]
       if (!old) return false
       const oldLive = (parseInt(old.viewer_count) || 0) > 0
-      const newLive = (parseInt(r.viewer_count) || 0) > 0
+      const newLive = r.is_live
       return oldLive !== newLive
     })
     rooms = newRooms
@@ -644,7 +644,7 @@ function updateViewers() {
   rooms.forEach(r => {
     const row = document.querySelector(`.room-table tr[data-id="${r.id}"]`)
     if (!row) return
-    const live = r.viewer_count != null && r.viewer_count > 0
+    const live = r.is_live
     const st = row.querySelector('.t-status')
     if (st) { st.className = `t-status ${live ? 'live' : 'offline'}`; st.textContent = live ? 'LIVE' : 'OFF' }
     const vc = row.querySelector('.t-viewer')
@@ -658,7 +658,7 @@ function updateViewers() {
 
 function renderStats() {
   const total = rooms.length
-  const live = rooms.filter(r => r.viewer_count != null && r.viewer_count > 0).length
+  const live = rooms.filter(r => r.is_live).length
   const viewers = rooms.reduce((s, r) => s + (parseInt(r.viewer_count) || 0), 0)
   document.getElementById('statsBar').innerHTML = `
     <span class="stat-pill"><span class="room-color num">${total}</span><span class="lbl">房间</span></span>
@@ -677,8 +677,8 @@ function sortedRooms() {
   const pinned = rooms.filter(r => r.pinned)
   const unpinned = rooms.filter(r => !r.pinned)
   unpinned.sort((a, b) => {
-    const aLive = (parseInt(a.viewer_count) || 0) > 0 ? 1 : 0
-    const bLive = (parseInt(b.viewer_count) || 0) > 0 ? 1 : 0
+    const aLive = a.is_live
+    const bLive = b.is_live
     if (bLive !== aLive) return bLive - aLive
     if (sortMode === 'viewers') return (parseInt(b.viewer_count) || 0) - (parseInt(a.viewer_count) || 0)
     return 0
@@ -705,7 +705,7 @@ function renderGrid() {
   const fmt = n => n != null ? Number(n).toLocaleString() : '—'
 
   let rows = page.map((r, i) => {
-    const live = r.viewer_count != null && r.viewer_count > 0
+    const live = r.is_live
     return `<tr draggable="true" data-id="${r.id}"
       ondragstart="onDragStart(event,'${r.id}')"
       ondragend="onDragEnd(event)"
@@ -773,8 +773,8 @@ function sortedRooms() {
   const pinned = rooms.filter(r => r.pinned)
   const unpinned = rooms.filter(r => !r.pinned)
   unpinned.sort((a, b) => {
-    const aLive = (parseInt(a.viewer_count) || 0) > 0 ? 1 : 0
-    const bLive = (parseInt(b.viewer_count) || 0) > 0 ? 1 : 0
+    const aLive = a.is_live
+    const bLive = b.is_live
     if (bLive !== aLive) return bLive - aLive
     if (sortMode === 'viewers') return (parseInt(b.viewer_count) || 0) - (parseInt(a.viewer_count) || 0)
     return 0
@@ -836,7 +836,7 @@ function closeDetail() {
 }
 
 function renderDetail(r) {
-  const live = r.viewer_count != null && r.viewer_count > 0
+  const live = r.is_live
   const fmt = n => n != null ? Number(n).toLocaleString() : '—'
   document.getElementById('detailHeader').innerHTML = `
     <div class="detail-avatar"><img src="${r.avatar || ''}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 48 48%22><rect fill=%22%23e4e8f0%22 width=%2248%22 height=%2248%22/><text x=%2224%22 y=%2232%22 text-anchor=%22middle%22 fill=%22%2395a3bb%22 font-size=%2220%22>?</text></svg>'"></div>
