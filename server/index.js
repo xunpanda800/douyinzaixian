@@ -70,32 +70,33 @@ function signParams() {
 }
 
 async function fetchRoomInfo(webcastId) {
-  try {
-    const data = await apiGet('/api/douyin/web/fetch_user_live_videos', {
-      webcast_id: webcastId, ...signParams()
-    })
-    const d = data?.data?.data
-    if (!d) return null
-    const stream = (d.data || [])[0] || {}
-    const owner = stream.owner || {}
-    const user = d.user || {}
-
-    return {
-      room_status: d.room_status ?? 0,
-      nickname: user.nickname || owner.nickname || '',
-      avatar: user.avatar_thumb?.url_list?.[0] || owner.avatar_thumb?.url_list?.[0] || '',
-      title: stream.title || '',
-      like_count: stream.like_count ?? 0,
-      room_id: stream.id_str || '',
-      sec_uid: user.sec_uid || owner.sec_uid || '',
-      follower_count: null,
-      viewer_count: stream.room_view_stats?.display_value ?? null,
-      webcast_id: webcastId,
+  for (const source of ['dyapi', 'wtf']) {
+    try {
+      const data = source === 'dyapi'
+        ? await apiGet('/api/douyin/web/fetch_user_live_videos', { webcast_id: webcastId, ...signParams() })
+        : await apiGetWtf('/api/douyin/web/fetch_user_live_videos', { webcast_id: webcastId })
+      const d = data?.data?.data
+      if (!d) continue
+      const stream = (d.data || [])[0] || {}
+      const owner = stream.owner || {}
+      const user = d.user || {}
+      return {
+        room_status: d.room_status ?? 0,
+        nickname: user.nickname || owner.nickname || '',
+        avatar: user.avatar_thumb?.url_list?.[0] || owner.avatar_thumb?.url_list?.[0] || '',
+        title: stream.title || '',
+        like_count: stream.like_count ?? 0,
+        room_id: stream.id_str || '',
+        sec_uid: user.sec_uid || owner.sec_uid || '',
+        follower_count: null,
+        viewer_count: stream.room_view_stats?.display_value ?? null,
+        webcast_id: webcastId,
+      }
+    } catch (e) {
+      console.log(`fetchRoomInfo (${source}) error:`, e.message)
     }
-  } catch (e) {
-    console.log('fetchRoomInfo error:', e.message)
-    return null
   }
+  return null
 }
 
 async function poll() {
