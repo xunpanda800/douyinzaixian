@@ -600,7 +600,19 @@ function connect() {
     setTimeout(connect, 2000)
   }
   ws.onmessage = e => {
-    const newRooms = JSON.parse(e.data).rooms || []
+    const msg = JSON.parse(e.data)
+    if (msg.type === 'update') {
+      const btn = document.getElementById('updateBtn')
+      if (msg.data.ok) {
+        btn.textContent = '✅ 重启中...'
+        setTimeout(() => location.reload(), 3000)
+      } else {
+        btn.disabled = false; btn.textContent = '⬆ 更新'
+        alert('更新失败: ' + msg.data.message)
+      }
+      return
+    }
+    const newRooms = msg.rooms || []
     const idsChanged = newRooms.length !== rooms.length ||
       newRooms.some((r, i) => r.id !== (rooms[i] && rooms[i].id))
     const liveChanged = !idsChanged && newRooms.some((r, i) => {
@@ -912,11 +924,8 @@ function refreshRoom(id) {
 
 function systemUpdate() {
   const btn = document.getElementById('updateBtn')
-  btn.disabled = true; btn.textContent = '⏳ 更新中...'
-  fetch('/api/system/update', { method: 'POST' }).then(r => r.json()).then(d => {
-    btn.textContent = '✅ 重启中...'
-    setTimeout(() => location.reload(), 3000)
-  }).catch(() => {
+  btn.disabled = true; btn.textContent = '⏳ 拉取镜像中...'
+  fetch('/api/system/update', { method: 'POST' }).catch(() => {
     btn.disabled = false; btn.textContent = '⬆ 更新'
   })
 }

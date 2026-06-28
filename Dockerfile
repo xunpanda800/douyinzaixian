@@ -3,6 +3,8 @@ FROM node:22-alpine
 ARG COMMIT_SHA=dev
 ARG VERSION=dev
 
+RUN apk add --no-cache docker-cli
+
 WORKDIR /app
 
 COPY package*.json ./

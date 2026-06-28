@@ -176,6 +176,11 @@ function broadcast() {
   wss.clients.forEach(c => { if (c.readyState === 1) c.send(JSON.stringify({ rooms: list })) })
 }
 
+function broadcastMessage(type, data) {
+  const msg = JSON.stringify({ type, data })
+  wss.clients.forEach(c => { if (c.readyState === 1) c.send(msg) })
+}
+
 async function addRoom(input) {
   input = input.trim()
   let m = input.match(/(?:live\.douyin\.com|douyin\.com\/(?:live\/)?)([a-zA-Z0-9_.]{3,20})(?:\?|$)/)
@@ -388,13 +393,19 @@ app.get('/api/system/version', (req, res) => {
 })
 
 app.post('/api/system/update', (req, res) => {
-  res.json({ ok: true, message: '正在拉取新镜像...' })
-  exec('docker pull ghcr.io/xunpanda800/douyinzaixian:latest', { timeout: 180000 }, (err, stdout, stderr) => {
-    if (err) return console.log('update pull error:', stderr)
+  res.json({ ok: true, message: '开始更新...' })
+  const projectDir = fs.existsSync('/app/project') ? '/app/project' : path.join(__dirname, '..')
+  exec(`cd ${projectDir} && docker compose pull`, { timeout: 180000 }, (err, stdout, stderr) => {
+    if (err) {
+      console.log('update pull error:', stderr)
+      broadcastMessage('update', { ok: false, message: '拉取镜像失败: ' + stderr.slice(0, 200) })
+      return
+    }
     console.log('update pull:', stdout)
+    broadcastMessage('update', { ok: true, message: '镜像拉取完成，正在重启...' })
     setTimeout(() => {
-      exec('docker compose -f /app/docker-compose.yml up -d', { timeout: 30000 }, (e, o, s) => {
-        console.log('update restart:', e ? s : o)
+      exec(`cd ${projectDir} && docker compose up -d`, { timeout: 30000 }, (e, o, s) => {
+        if (e) console.log('update restart error:', s)
       })
     }, 500)
   })

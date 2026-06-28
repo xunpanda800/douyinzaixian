@@ -7,7 +7,7 @@ services:
     restart: unless-stopped
     volumes:
       - ./data:/app/data
-      - ./docker-compose.yml:/app/docker-compose.yml:ro
+      - .:/app/project
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       - DOUYIN_COOKIE=${DOUYIN_COOKIE:-}
