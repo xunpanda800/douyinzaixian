@@ -395,67 +395,121 @@ app.get('/api/system/version', (req, res) => {
   } catch { res.json({ version: 'unknown' }) }
 })
 
-function dockerRequest(method, path, body) {
+// Docker API client - tries all possible connection methods
+const DOCKER_SOCKETS = [
+  '/var/run/docker.sock', '/run/docker.sock',
+  '/var/run/docker-ce.sock', '/run/docker-ce.sock',
+  '/var/run/docker.sys', '/docker.sock',
+]
+
+function findDockerSocket() {
+  for (const s of DOCKER_SOCKETS) {
+    try { if (fs.existsSync(s) && fs.statSync(s).isSocket()) return s } catch {}
+  }
+  return null
+}
+
+function dockerHttp(opts) {
   return new Promise((resolve, reject) => {
-    const sockets = ['/var/run/docker.sock', '/run/docker.sock']
-    const trySocket = i => {
-      if (i >= sockets.length) return reject(new Error('no docker socket found'))
-      const sockPath = sockets[i]
-      if (!fs.existsSync(sockPath)) return trySocket(i + 1)
-      const opts = { socketPath: sockPath, method, path, headers: { 'Host': 'localhost' } }
-      if (body) opts.headers['Content-Type'] = 'application/json'
-      const req = http.request(opts, res => {
-        let b = ''
-        res.on('data', c => b += c)
-        res.on('end', () => {
-          try { resolve(JSON.parse(b)) } catch { resolve(b) }
-        })
+    const req = http.request(opts, res => {
+      let b = ''
+      res.on('data', c => b += c)
+      res.on('end', () => {
+        try { resolve(b ? JSON.parse(b) : null) } catch { resolve(b) }
       })
-      req.on('error', () => trySocket(i + 1))
-      req.on('timeout', () => { req.destroy(); trySocket(i + 1) })
-      req.setTimeout(10000)
-      if (body) req.write(JSON.stringify(body))
-      req.end()
-    }
-    trySocket(0)
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+    if (opts.body) req.write(JSON.stringify(opts.body))
+    req.end()
   })
 }
 
+function dockerRequest(method, apiPath, body, timeout = 10000) {
+  const sock = findDockerSocket()
+  if (sock) {
+    return dockerHttp({ socketPath: sock, method, path: apiPath, headers: { 'Host': 'localhost', 'Content-Type': body ? 'application/json' : undefined }, body, timeout, setTimeout: timeout })
+  }
+  // Try TCP as fallback (common Docker ports)
+  const hosts = (process.env.DOCKER_HOST || 'tcp://127.0.0.1:2375').replace('tcp://', '').split(':')
+  return dockerHttp({ host: hosts[0] || '127.0.0.1', port: parseInt(hosts[1]) || 2375, method, path: apiPath, headers: { 'Host': 'localhost', 'Content-Type': body ? 'application/json' : undefined }, body, timeout, setTimeout: timeout })
+}
+
 async function dockerPull(image) {
-  const [registry, repo, tag] = image.match(/(.+?)\/(.+?):(.+)/).slice(1)
-  const path = `/v1.41/images/create?fromImage=${encodeURIComponent(registry + '/' + repo)}&tag=${encodeURIComponent(tag)}`
-  // Docker pull is a streaming response, wait for completion
+  const m = image.match(/(.+?)\/(.+?):(.+)/)
+  if (!m) throw new Error('invalid image: ' + image)
+  const fromImage = encodeURIComponent(m[1] + '/' + m[2])
+  const tag = encodeURIComponent(m[3])
+  const apiPath = `/v1.41/images/create?fromImage=${fromImage}&tag=${tag}`
   let lastStatus = ''
+  const sock = findDockerSocket()
+  if (!sock) throw new Error('无法找到 Docker 套接字，请确认已在 docker-compose.yml 中挂载 /var/run/docker.sock')
+
   return new Promise((resolve, reject) => {
-    const sockets = ['/var/run/docker.sock', '/run/docker.sock']
-    const trySocket = i => {
-      if (i >= sockets.length) return reject(new Error('no docker socket'))
-      const sockPath = sockets[i]
-      if (!fs.existsSync(sockPath)) return trySocket(i + 1)
-      const req = http.request({ socketPath: sockPath, path, method: 'POST', headers: { 'Host': 'localhost' }, timeout: 180000 }, res => {
-        res.on('data', c => {
-          const lines = c.toString().split('\n').filter(Boolean)
-          for (const l of lines) {
-            try {
-              const j = JSON.parse(l)
-              if (j.status) lastStatus = j.status
-              if (j.error) reject(new Error(j.error))
-            } catch {}
-          }
-        })
-        res.on('end', () => {
-          if (lastStatus.includes('Downloaded') || lastStatus.includes('Already exists') || lastStatus.includes('Pulled') || lastStatus.includes('up to date')) resolve(lastStatus)
-          else reject(new Error('pull incomplete: ' + lastStatus))
-        })
+    const req = http.request({ socketPath: sock, path: apiPath, method: 'POST', headers: { 'Host': 'localhost' }, timeout: 180000 }, res => {
+      res.on('data', c => {
+        const lines = c.toString().split('\n').filter(Boolean)
+        for (const l of lines) {
+          try {
+            const j = JSON.parse(l)
+            if (j.status) lastStatus = j.status
+            if (j.error) reject(new Error(j.error))
+          } catch {}
+        }
       })
-      req.on('error', () => trySocket(i + 1))
-      req.on('timeout', () => { req.destroy(); trySocket(i + 1) })
-      req.setTimeout(185000)
-      req.end()
-    }
-    trySocket(0)
+      res.on('end', () => {
+        if (lastStatus.includes('Downloaded') || lastStatus.includes('Already exists') || lastStatus.includes('Pulled') || lastStatus.includes('up to date')) resolve(lastStatus)
+        else reject(new Error('pull incomplete: ' + lastStatus))
+      })
+    })
+    req.on('error', reject)
+    req.on('timeout', () => { req.destroy(); reject(new Error('timeout')) })
+    req.setTimeout(185000)
+    req.end()
   })
 }
+
+// Latest GitHub release version check
+app.get('/api/system/check-update', (req, res) => {
+  let current = 'dev'
+  try { current = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'version.json'), 'utf8')).version || current } catch {}
+  const ghReq = https.get('https://api.github.com/repos/xunpanda800/douyinzaixian/releases/latest', { headers: { 'User-Agent': 'dy-live-viewer', 'Accept': 'application/vnd.github.v3+json' }, timeout: 8000 }, ghRes => {
+    let b = ''
+    ghRes.on('data', c => b += c)
+    ghRes.on('end', () => {
+      try {
+        const data = JSON.parse(b)
+        const latest = (data.tag_name || data.name || '').replace(/^v/, '')
+        const hasUpdate = latest !== current
+        res.json({ current, latest, hasUpdate, url: data.html_url || '' })
+      } catch { res.json({ current, latest: '', hasUpdate: false, error: 'parse failed' }) }
+    })
+  })
+  ghReq.on('error', () => res.json({ current, latest: '', hasUpdate: false, error: 'network' }))
+  ghReq.setTimeout(8000, () => { ghReq.destroy(); res.json({ current, latest: '', hasUpdate: false, error: 'timeout' }) })
+})
+
+// Diagnose Docker connectivity
+app.get('/api/system/docker-diag', (req, res) => {
+  const results = {}
+  for (const s of DOCKER_SOCKETS) {
+    try {
+      const exists = fs.existsSync(s)
+      let isSock = false
+      if (exists) { try { isSock = fs.statSync(s).isSocket() } catch {} }
+      results[s] = exists ? (isSock ? '✅ socket' : '⚠️ 文件存在但不是 socket') : '❌ 不存在'
+    } catch (e) { results[s] = '❌ ' + e.message }
+  }
+  // Try connecting to Docker daemon
+  const sock = findDockerSocket()
+  if (sock) {
+    dockerHttp({ socketPath: sock, path: '/v1.41/info', headers: { 'Host': 'localhost' }, timeout: 3000 })
+      .then(info => res.json({ sockets: results, connected: true, version: info.ServerVersion || '?' }))
+      .catch(e => res.json({ sockets: results, connected: false, error: e.message }))
+  } else {
+    res.json({ sockets: results, connected: false, note: '未找到 Docker 套接字。请确认 docker-compose.yml 中已添加: volumes: [ "/var/run/docker.sock:/var/run/docker.sock" ]' })
+  }
+})
 
 app.post('/api/system/update', async (req, res) => {
   res.json({ ok: true, message: '开始更新...' })
@@ -465,10 +519,9 @@ app.post('/api/system/update', async (req, res) => {
     broadcastMessage('update', { ok: true, message: '镜像拉取完成，正在重启...' })
     setTimeout(async () => {
       try {
-        // Restart this container via Docker API
         const containers = await dockerRequest('GET', '/v1.41/containers/json?all=true&filters={"name":["dy-live-viewer"]}')
         if (containers && containers[0]) {
-          await dockerRequest('POST', `/v1.41/containers/${containers[0].Id}/restart`, null)
+          await dockerRequest('POST', `/v1.41/containers/${containers[0].Id}/restart`)
         }
       } catch (e) {
         console.log('update restart error:', e.message)
@@ -476,7 +529,7 @@ app.post('/api/system/update', async (req, res) => {
     }, 500)
   } catch (e) {
     console.log('update pull error:', e.message)
-    broadcastMessage('update', { ok: false, message: '拉取镜像失败: ' + e.message.slice(0, 200) })
+    broadcastMessage('update', { ok: false, message: '更新失败: ' + e.message })
   }
 })
 
