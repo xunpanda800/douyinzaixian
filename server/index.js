@@ -55,11 +55,21 @@ function apiGet(pathname, query) {
   })
 }
 
-async function fetchViewerCount(webcastId) {
-  const data = await apiGet('/get_live_room_num', {
-    webcast_id: webcastId, version: '187', platform: 'server'
-  })
-  return data?.data?.data?.data?.[0]?.room_view_stats?.display_value ?? null
+async function fetchViewerCount(webcastId, retries = 2) {
+  for (let i = 0; i <= retries; i++) {
+    try {
+      const data = await apiGet('/get_live_room_num', {
+        webcast_id: webcastId, version: '187', platform: 'server'
+      })
+      return data?.data?.data?.data?.[0]?.room_view_stats?.display_value ?? null
+    } catch (e) {
+      if (i < retries) {
+        await new Promise(r => setTimeout(r, 1000 * (i + 1)))
+      } else {
+        throw e
+      }
+    }
+  }
 }
 
 const md5 = s => crypto.createHash('md5').update(s).digest('hex')
