@@ -4,7 +4,6 @@ const https = require('https')
 const path = require('path')
 const fs = require('fs')
 const crypto = require('crypto')
-const { exec } = require('child_process')
 const { WebSocketServer } = require('ws')
 const db = require('./db')
 
@@ -396,23 +395,89 @@ app.get('/api/system/version', (req, res) => {
   } catch { res.json({ version: 'unknown' }) }
 })
 
-app.post('/api/system/update', (req, res) => {
-  res.json({ ok: true, message: '开始更新...' })
-  const projectDir = fs.existsSync('/app/project') ? '/app/project' : path.join(__dirname, '..')
-  exec(`cd ${projectDir} && docker compose pull`, { timeout: 180000 }, (err, stdout, stderr) => {
-    if (err) {
-      console.log('update pull error:', stderr)
-      broadcastMessage('update', { ok: false, message: '拉取镜像失败: ' + stderr.slice(0, 200) })
-      return
-    }
-    console.log('update pull:', stdout)
-    broadcastMessage('update', { ok: true, message: '镜像拉取完成，正在重启...' })
-    setTimeout(() => {
-      exec(`cd ${projectDir} && docker compose up -d`, { timeout: 30000 }, (e, o, s) => {
-        if (e) console.log('update restart error:', s)
+function dockerRequest(method, path, body) {
+  return new Promise((resolve, reject) => {
+    const sockets = ['/var/run/docker.sock', '/run/docker.sock']
+    const trySocket = i => {
+      if (i >= sockets.length) return reject(new Error('no docker socket found'))
+      const sockPath = sockets[i]
+      if (!fs.existsSync(sockPath)) return trySocket(i + 1)
+      const opts = { socketPath: sockPath, method, path, headers: { 'Host': 'localhost' } }
+      if (body) opts.headers['Content-Type'] = 'application/json'
+      const req = http.request(opts, res => {
+        let b = ''
+        res.on('data', c => b += c)
+        res.on('end', () => {
+          try { resolve(JSON.parse(b)) } catch { resolve(b) }
+        })
       })
-    }, 500)
+      req.on('error', () => trySocket(i + 1))
+      req.on('timeout', () => { req.destroy(); trySocket(i + 1) })
+      req.setTimeout(10000)
+      if (body) req.write(JSON.stringify(body))
+      req.end()
+    }
+    trySocket(0)
   })
+}
+
+async function dockerPull(image) {
+  const [registry, repo, tag] = image.match(/(.+?)\/(.+?):(.+)/).slice(1)
+  const path = `/v1.41/images/create?fromImage=${encodeURIComponent(registry + '/' + repo)}&tag=${encodeURIComponent(tag)}`
+  // Docker pull is a streaming response, wait for completion
+  let lastStatus = ''
+  return new Promise((resolve, reject) => {
+    const sockets = ['/var/run/docker.sock', '/run/docker.sock']
+    const trySocket = i => {
+      if (i >= sockets.length) return reject(new Error('no docker socket'))
+      const sockPath = sockets[i]
+      if (!fs.existsSync(sockPath)) return trySocket(i + 1)
+      const req = http.request({ socketPath: sockPath, path, method: 'POST', headers: { 'Host': 'localhost' }, timeout: 180000 }, res => {
+        res.on('data', c => {
+          const lines = c.toString().split('\n').filter(Boolean)
+          for (const l of lines) {
+            try {
+              const j = JSON.parse(l)
+              if (j.status) lastStatus = j.status
+              if (j.error) reject(new Error(j.error))
+            } catch {}
+          }
+        })
+        res.on('end', () => {
+          if (lastStatus.includes('Downloaded') || lastStatus.includes('Already exists') || lastStatus.includes('Pulled') || lastStatus.includes('up to date')) resolve(lastStatus)
+          else reject(new Error('pull incomplete: ' + lastStatus))
+        })
+      })
+      req.on('error', () => trySocket(i + 1))
+      req.on('timeout', () => { req.destroy(); trySocket(i + 1) })
+      req.setTimeout(185000)
+      req.end()
+    }
+    trySocket(0)
+  })
+}
+
+app.post('/api/system/update', async (req, res) => {
+  res.json({ ok: true, message: '开始更新...' })
+  try {
+    const status = await dockerPull('ghcr.io/xunpanda800/douyinzaixian:latest')
+    console.log('update pull:', status)
+    broadcastMessage('update', { ok: true, message: '镜像拉取完成，正在重启...' })
+    setTimeout(async () => {
+      try {
+        // Restart this container via Docker API
+        const containers = await dockerRequest('GET', '/v1.41/containers/json?all=true&filters={"name":["dy-live-viewer"]}')
+        if (containers && containers[0]) {
+          await dockerRequest('POST', `/v1.41/containers/${containers[0].Id}/restart`, null)
+        }
+      } catch (e) {
+        console.log('update restart error:', e.message)
+      }
+    }, 500)
+  } catch (e) {
+    console.log('update pull error:', e.message)
+    broadcastMessage('update', { ok: false, message: '拉取镜像失败: ' + e.message.slice(0, 200) })
+  }
 })
 
 wss.on('connection', (ws) => {
