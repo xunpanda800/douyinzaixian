@@ -1,0 +1,11 @@
+services:
+  dy-viewer:
+    build: .
+    container_name: dy-live-viewer
+    ports:
+      - "3000:3000"
+    restart: unless-stopped
+    volumes:
+      - ./data:/app/data
+    environment:
+      - DOUYIN_COOKIE=${DOUYIN_COOKIE:-}

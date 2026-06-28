@@ -1,0 +1,1030 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>抖音直播监控 · Pulse</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.6.0/dist/echarts.min.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root {
+  --bg: #f2f4f9;
+  --surface: #ffffff;
+  --surface-hover: #f7f9fd;
+  --border: #e4e9f2;
+  --primary: #2059e6;
+  --primary-soft: rgba(32,89,230,0.08);
+  --accent: #f2485c;
+  --accent-soft: rgba(242,72,92,0.08);
+  --green: #0fc28a;
+  --green-soft: rgba(15,194,138,0.12);
+  --amber: #f5a623;
+  --red: #ef4444;
+  --gold: #ffbe3d;
+  --silver: #b8c2d0;
+  --bronze: #cd7f4b;
+  --text: #0c1427;
+  --text-secondary: #536074;
+  --muted: #95a3bb;
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.03);
+  --shadow: 0 1px 4px rgba(0,0,0,0.04), 0 2px 8px rgba(0,0,0,0.03);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+  --font: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', monospace;
+}
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: var(--font);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+}
+
+/* Header – compact, stats integrated */
+.header {
+  position: sticky; top: 0; z-index: 100;
+  background: rgba(255,255,255,0.85);
+  backdrop-filter: blur(16px) saturate(1.6);
+  border-bottom: 1px solid var(--border);
+}
+.header-inner {
+  max-width: 1440px; margin: 0 auto;
+  display: flex; align-items: center; gap: 16px;
+  padding: 10px 28px;
+}
+
+.logo {
+  display: flex; align-items: center; gap: 8px; flex-shrink: 0;
+  padding-right: 16px; border-right: 1px solid var(--border);
+}
+.logo-icon {
+  width: 26px; height: 26px; border-radius: 7px;
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 700; font-size: 13px; color: #fff;
+}
+.logo-text { font-weight: 700; font-size: 15px; color: var(--text); letter-spacing: .3px; }
+
+.search-group {
+  display: flex; align-items: center; gap: 6px;
+  position: relative; flex: 1; max-width: 380px;
+}
+.search-group input {
+  flex: 1; padding: 7px 12px 7px 32px;
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  background: var(--surface); color: var(--text);
+  font-family: var(--font); font-size: 13px; outline: none;
+  transition: border-color .2s, box-shadow .2s;
+}
+.search-group input:focus { border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-soft); }
+.search-group input::placeholder { color: var(--muted); }
+.search-group::before {
+  content: '🔍'; position: absolute; left: 10px;
+  font-size: 12px; pointer-events: none; opacity: .5;
+}
+
+.btn {
+  padding: 7px 18px; border: none; border-radius: var(--radius-sm);
+  font-family: var(--font); font-weight: 600; font-size: 13px;
+  cursor: pointer; transition: all .18s; white-space: nowrap;
+  line-height: 1.4;
+}
+.btn-primary { background: var(--primary); color: #fff; }
+.btn-primary:hover { background: #1a4fd1; box-shadow: 0 2px 8px rgba(32,89,230,.25); }
+.btn-primary:active { transform: scale(.97); }
+.btn-outline {
+  background: var(--surface); color: var(--text-secondary);
+  border: 1px solid var(--border);
+}
+.btn-outline:hover { color: var(--text); border-color: var(--primary); background: var(--primary-soft); }
+
+/* Header stats pills */
+.header-stats {
+  display: flex; align-items: center; gap: 6px;
+  margin-left: auto; padding: 0 8px;
+  font-size: 12px; color: var(--text-secondary); white-space: nowrap;
+}
+.stat-pill {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 10px; border-radius: 20px;
+  background: var(--surface); border: 1px solid var(--border);
+  font-family: var(--mono); font-weight: 600; font-size: 11px;
+}
+.stat-pill .num { font-weight: 700; font-size: 13px; }
+.stat-pill .num.live-color { color: var(--green); }
+.stat-pill .num.viewer-color { color: var(--primary); }
+.stat-pill .num.room-color { color: var(--text); }
+
+.connection {
+  display: flex; align-items: center; gap: 6px;
+  font-size: 11px; color: var(--muted);
+  font-family: var(--mono); flex-shrink: 0;
+}
+.dot {
+  width: 5px; height: 5px; border-radius: 50%; transition: all .5s;
+}
+.dot.on { background: var(--green); box-shadow: 0 0 6px var(--green); }
+.dot.off { background: var(--red); }
+.dot.connecting { background: var(--amber); animation: pulse-dot 1s infinite; }
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+
+/* Sort toggle (injected by JS into header-stats) */
+.sort-toggle {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--muted); cursor: pointer;
+  padding: 3px 8px; border: 1px solid transparent; border-radius: 6px;
+  transition: all .15s; font-family: var(--font); white-space: nowrap;
+}
+.sort-toggle:hover { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
+.sort-toggle.active { color: var(--primary); border-color: var(--primary); background: var(--primary-soft); }
+
+/* Main content area */
+.main {
+  max-width: 1440px; margin: 0 auto; padding: 16px 28px 40px;
+}
+
+/* Table - clean data table */
+.room-table {
+  width: 100%; border-collapse: separate; border-spacing: 0;
+  background: var(--surface); border-radius: var(--radius);
+  overflow: hidden; box-shadow: var(--shadow);
+}
+.room-table thead th {
+  text-align: left; padding: 10px 14px;
+  font-size: 10px; font-weight: 600; color: var(--muted);
+  text-transform: uppercase; letter-spacing: .6px;
+  background: #f7f9fc; border-bottom: 1px solid var(--border);
+}
+.room-table tbody td {
+  padding: 10px 14px; font-size: 13px; vertical-align: middle;
+  border-bottom: 1px solid #eff1f7; transition: background .12s;
+}
+.room-table tbody tr:last-child td { border-bottom: none; }
+.room-table tbody tr { cursor: pointer; transition: background .1s; }
+.room-table tbody tr:hover { background: #f7f9fd; }
+
+.col-user { display: flex; align-items: center; gap: 8px; }
+
+.t-avatar {
+  width: 30px; height: 30px; border-radius: 50%;
+  overflow: hidden; flex-shrink: 0; background: #e4e8f0;
+}
+.t-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.t-name { font-weight: 600; color: var(--text); font-size: 13px; }
+.t-id { font-family: var(--mono); font-size: 10px; color: var(--muted); margin-top: 1px; }
+
+.t-status {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 10px; font-weight: 600;
+  padding: 3px 10px; border-radius: 20px; letter-spacing: .3px;
+}
+.t-status.live { background: var(--green-soft); color: var(--green); }
+.t-status.live::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--green); animation: live-pulse 1.5s infinite;
+}
+.t-status.offline { background: #f0f2f6; color: var(--muted); }
+
+@keyframes live-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: .3; }
+}
+
+.t-title {
+  color: var(--text-secondary); font-size: 12px;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 140px;
+}
+.t-title:empty::before { content: '—'; color: var(--muted); }
+
+.t-num {
+  font-family: var(--mono); font-weight: 700; font-size: 14px;
+  font-variant-numeric: tabular-nums;
+}
+.t-num.primary { color: var(--primary); }
+.t-num.green { color: var(--green); }
+.t-num.amber { color: var(--amber); }
+.t-num.muted { color: var(--muted); }
+
+.t-actions { display: flex; gap: 2px; }
+.t-actions button {
+  background: none; border: none; border-radius: 5px;
+  color: var(--muted); font-size: 13px; line-height: 1;
+  padding: 4px 6px; cursor: pointer; transition: all .15s;
+}
+.t-actions button:hover { color: var(--text); background: #f0f2f8; }
+.t-actions .del:hover { color: var(--red); background: rgba(239,68,68,0.08); }
+
+.t-time {
+  font-family: var(--mono); font-size: 10px; color: var(--muted); white-space: nowrap;
+}
+
+/* Drag */
+.t-drag {
+  cursor: grab; color: var(--muted); font-size: 14px;
+  user-select: none; line-height: 1; opacity: .4; padding: 2px;
+  transition: opacity .15s;
+}
+tr:hover .t-drag { opacity: .8; }
+.t-drag:active { cursor: grabbing; }
+.room-table tbody tr.dragging { opacity: .45; }
+.room-table tbody tr.drag-over td { border-bottom: 2px solid var(--primary); }
+
+/* Pagination */
+.pagination {
+  display: flex; align-items: center; justify-content: center;
+  gap: 6px; margin-top: 14px;
+  font-size: 13px; color: var(--text-secondary);
+}
+.pagination button {
+  background: var(--surface); border: 1px solid var(--border);
+  border-radius: var(--radius-sm); color: var(--text); font-size: 12px;
+  padding: 5px 14px; cursor: pointer; font-family: var(--font);
+  transition: all .15s; line-height: 1.4;
+}
+.pagination button:hover { border-color: var(--primary); color: var(--primary); }
+.pagination button:disabled { opacity: .3; cursor: default; border-color: var(--border); color: var(--muted); }
+.pagination .page-info { font-family: var(--mono); font-size: 11px; min-width: 56px; text-align: center; color: var(--muted); }
+
+/* Overlays */
+.overlay {
+  position: fixed; inset: 0;
+  background: rgba(10,20,40,0.45);
+  backdrop-filter: blur(6px);
+  z-index: 200; display: none;
+  align-items: center; justify-content: center;
+}
+.overlay.open { display: flex; }
+
+.panel {
+  background: var(--surface); border-radius: 16px;
+  width: 92vw; max-height: 88vh;
+  overflow: hidden; display: flex; flex-direction: column;
+  animation: panel-in .3s cubic-bezier(.22,.68,0,1);
+  box-shadow: var(--shadow-lg);
+}
+
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes panel-in { from { opacity: 0; transform: scale(.96) translateY(16px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes row-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+.panel-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.panel-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
+
+.close-btn {
+  background: none; border: none; color: var(--muted); cursor: pointer;
+  width: 28px; height: 28px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 16px; transition: all .2s; flex-shrink: 0;
+}
+.close-btn:hover { color: var(--text); background: #f0f2f7; }
+
+/* Detail panel */
+.detail-panel { max-width: 780px; }
+.detail-avatar {
+  width: 42px; height: 42px; border-radius: 50%;
+  overflow: hidden; flex-shrink: 0;
+  border: 2px solid var(--border); background: #e4e8f0;
+}
+.detail-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.detail-info { flex: 1; min-width: 0; }
+.detail-info .name {
+  font-weight: 600; font-size: 15px;
+  display: flex; align-items: center; gap: 6px;
+}
+.detail-info .name .edit-btn {
+  font-size: 11px; color: var(--muted); cursor: pointer;
+  background: none; border: none; padding: 2px 5px;
+  border-radius: 4px; transition: all .2s;
+}
+.detail-info .name .edit-btn:hover { color: var(--primary); background: var(--primary-soft); }
+.detail-info .sub { font-size: 11px; color: var(--text-secondary); margin-top: 1px; }
+.detail-info .sub .sec { color: var(--primary); text-decoration: none; font-weight: 500; }
+
+.detail-metrics {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
+  gap: 8px; margin-bottom: 16px;
+}
+.detail-metric {
+  background: #f7f9fd; border-radius: var(--radius-sm);
+  padding: 10px 12px; border: 1px solid var(--border);
+}
+.detail-metric .label {
+  font-size: 9px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 3px;
+}
+.detail-metric .value {
+  font-family: var(--mono); font-weight: 700; font-size: 20px; line-height: 1.2;
+}
+.detail-metric .value.online { color: var(--primary); }
+.detail-metric .value.likes { color: var(--accent); }
+.detail-metric .value.fans { color: var(--green); }
+.detail-metric .value.offline { color: var(--muted); }
+
+.detail-actions { display: flex; gap: 6px; margin-bottom: 16px; }
+.detail-actions button { font-size: 12px; padding: 6px 14px; }
+
+.detail-chart {
+  background: #f7f9fd; border-radius: var(--radius-sm);
+  border: 1px solid var(--border); padding: 14px;
+}
+.detail-chart .chart-header {
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
+}
+.detail-chart .chart-header h3 {
+  font-size: 11px; color: var(--text-secondary); font-weight: 500; letter-spacing: .4px; text-transform: uppercase;
+}
+#trendChart { width: 100%; height: 200px; }
+
+/* Dialog panels (gift, history) */
+.dialog-gift { max-width: 500px; }
+.dialog-history { max-width: 740px; }
+
+.tab-bar {
+  display: flex; gap: 2px; background: #f0f2f7; border-radius: 6px; padding: 2px;
+}
+.tab-btn {
+  background: none; border: none; padding: 4px 10px; font-size: 11px;
+  border-radius: 5px; cursor: pointer; color: var(--muted);
+  font-family: var(--font); transition: .12s;
+}
+.tab-btn.active { background: #fff; color: var(--text); font-weight: 600; box-shadow: 0 1px 3px rgba(0,0,0,.06); }
+.tab-btn:hover:not(.active) { color: var(--text); }
+
+#historyChart { width: 100%; height: 380px; }
+
+/* Gift list */
+.gift-grid { display: grid; gap: 4px; }
+.gift-row {
+  display: grid; grid-template-columns: 28px 34px 1fr auto 32px;
+  align-items: center; gap: 8px; padding: 6px 8px;
+  border-radius: var(--radius-sm); cursor: pointer;
+  transition: background .15s; font-size: 13px;
+}
+.gift-row:hover { background: #f7f9fd; }
+.gift-row .rank {
+  font-family: var(--mono); font-weight: 700; font-size: 12px; text-align: center;
+}
+.gift-row .rank.top1 { color: var(--gold); }
+.gift-row .rank.top2 { color: var(--silver); }
+.gift-row .rank.top3 { color: var(--bronze); }
+.gift-row .rank.normal { color: var(--muted); }
+
+.g-avatar { width: 28px; height: 28px; border-radius: 50%; overflow: hidden; flex-shrink: 0; background: #e4e8f0; }
+.g-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.g-name { color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.g-name img { vertical-align: middle; }
+
+.g-level {
+  font-family: var(--mono); font-size: 10px; padding: 1px 7px;
+  border-radius: 8px; text-align: center; white-space: nowrap;
+}
+
+.g-gender { text-align: center; font-size: 12px; color: var(--muted); }
+.g-fc { font-size: 10px; color: var(--muted); margin-left: 3px; }
+
+/* Empty / loading / error states */
+.state-box {
+  display: flex; flex-direction: column; align-items: center;
+  justify-content: center; text-align: center;
+  padding: 60px 24px; min-height: 200px;
+}
+.state-box .icon {
+  width: 48px; height: 48px; border-radius: 14px;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 22px; margin-bottom: 14px;
+  background: #f0f2f7;
+}
+.state-box h3 { font-weight: 600; font-size: 15px; margin-bottom: 4px; color: var(--text-secondary); }
+.state-box p { font-size: 13px; color: var(--muted); max-width: 260px; }
+.state-box.loading .icon { animation: state-pulse 1.2s infinite; }
+@keyframes state-pulse { 0%,100% { opacity: .4; } 50% { opacity: 1; } }
+
+/* Scrollbar */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: #d0d6e0; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #a8b0c0; }
+
+/* Responsive */
+@media (max-width: 860px) {
+  .header-inner { padding: 8px 16px; flex-wrap: wrap; gap: 8px; }
+  .search-group { order: 3; max-width: 100%; flex-basis: 100%; }
+  .header-stats { margin-left: 0; }
+  .main { padding: 12px 14px 32px; }
+  .room-table thead th, .room-table tbody td { padding: 8px 10px; }
+  .hide-mobile { display: none; }
+  .dialog-gift { max-width: 96vw; }
+  .dialog-history { max-width: 96vw; }
+  .detail-panel { max-width: 96vw; border-radius: 14px; max-height: 92vh; }
+  .detail-metrics { grid-template-columns: 1fr 1fr; }
+}
+@media (max-width: 480px) {
+  .header-stats { gap: 4px; }
+  .stat-pill { padding: 2px 6px; font-size: 10px; }
+  .stat-pill .num { font-size: 11px; }
+  .connection { display: none; }
+}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="header-inner">
+    <div class="logo">
+      <div class="logo-icon">P</div>
+      <span class="logo-text">PULSE</span>
+    </div>
+    <div class="search-group">
+      <input id="roomInput" type="text" placeholder="房间号 或 live.douyin.com/..." autocomplete="off" />
+      <button class="btn btn-primary" id="addBtn">添加</button>
+    </div>
+    <div class="header-stats" id="statsBar"></div>
+    <div class="connection">
+      <span class="dot connecting" id="wsDot"></span>
+      <span id="wsLabel">连接中</span>
+    </div>
+  </div>
+</div>
+
+<div class="main">
+  <div class="room-grid" id="roomGrid"></div>
+  <div class="pagination" id="pagination"></div>
+</div>
+
+<!-- Detail overlay -->
+<div class="overlay" id="detailOverlay">
+  <div class="detail-panel">
+    <div class="panel-header" id="detailHeader"></div>
+    <div class="panel-body">
+      <div class="detail-metrics" id="detailMetrics"></div>
+      <div class="detail-actions" id="detailActions"></div>
+      <div class="detail-chart">
+        <div class="chart-header">
+          <h3>在线人数趋势</h3>
+          <span id="historyCount" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;"></span>
+        </div>
+        <div id="trendChart"></div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Gift dialog -->
+<div class="overlay" id="giftDialog">
+  <div class="panel dialog-gift">
+    <div class="panel-header">
+      <h3 style="font-weight:600;font-size:14px;flex:1;">🎁 礼物榜单 <span id="giftRoomLabel" style="font-size:11px;color:var(--muted);font-weight:400;"></span></h3>
+      <div style="display:flex;gap:4px;">
+        <button class="close-btn" onclick="refreshGift()" title="刷新">↻</button>
+        <button class="close-btn" onclick="closeGift()">✕</button>
+      </div>
+    </div>
+    <div class="panel-body" id="giftBody"><div style="text-align:center;color:var(--muted);padding:40px;">加载中...</div></div>
+  </div>
+</div>
+
+<!-- History dialog -->
+<div class="overlay" id="historyDialog">
+  <div class="panel dialog-history">
+    <div class="panel-header">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;">
+        <h3 style="font-weight:600;font-size:14px;">📈 历史趋势 <span id="historyRoomLabel" style="font-size:11px;color:var(--muted);font-weight:400;"></span></h3>
+        <div id="historyTabs" class="tab-bar">
+          <button class="tab-btn active" data-tab="viewers" onclick="switchHistoryTab('viewers')">在线人数</button>
+          <button class="tab-btn" data-tab="likes" onclick="switchHistoryTab('likes')">点赞数</button>
+        </div>
+      </div>
+      <div style="display:flex;gap:4px;">
+        <button class="close-btn" onclick="currentHistoryRoomId && openHistory(currentHistoryRoomId)" title="刷新">↻</button>
+        <button class="close-btn" onclick="closeHistory()">✕</button>
+      </div>
+    </div>
+    <div class="panel-body"><div id="historyChart"></div></div>
+  </div>
+</div>
+
+<script>
+const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`
+let ws, rooms = [], activeRoomId = null, trendChart = null, historyChart = null
+let prevViewers = {}
+let currentPage = 1, pageSize = 20, dragId = null
+let sortMode = 'manual' // 'manual' | 'viewers'
+
+function connect() {
+  ws = new WebSocket(wsUrl)
+  ws.onopen = () => {
+    document.getElementById('wsDot').className = 'dot on'
+    document.getElementById('wsLabel').textContent = '已连接'
+  }
+  ws.onclose = () => {
+    document.getElementById('wsDot').className = 'dot connecting'
+    document.getElementById('wsLabel').textContent = '重连中...'
+    setTimeout(connect, 2000)
+  }
+  ws.onmessage = e => {
+    const newRooms = JSON.parse(e.data).rooms || []
+    const idsChanged = newRooms.length !== rooms.length ||
+      newRooms.some((r, i) => r.id !== (rooms[i] && rooms[i].id))
+    const liveChanged = !idsChanged && newRooms.some((r, i) => {
+      const old = rooms[i]
+      if (!old) return false
+      const oldLive = (parseInt(old.viewer_count) || 0) > 0
+      const newLive = (parseInt(r.viewer_count) || 0) > 0
+      return oldLive !== newLive
+    })
+    rooms = newRooms
+    if (idsChanged || liveChanged) {
+      renderAll()
+    } else {
+      updateViewers()
+      renderStats()
+      if (activeRoomId && document.getElementById('detailOverlay').classList.contains('open')) {
+        const r = rooms.find(x => x.id === activeRoomId)
+        if (r) renderDetail(r)
+      }
+    }
+    rooms.forEach(r => { prevViewers[r.id] = r.viewer_count })
+  }
+}
+
+function viewerDelta(r) {
+  const prev = prevViewers[r.id]
+  const cur = r.viewer_count
+  if (prev == null || cur == null) return ''
+  const diff = cur - prev
+  if (diff === 0) return ''
+  const s = diff > 0 ? `+${diff.toLocaleString()}` : diff.toLocaleString()
+  const color = diff > 0 ? '#ef4444' : '#10b981'
+  return ` <span style="color:${color};font-size:11px;font-weight:600">${s}</span>`
+}
+
+function renderAll() {
+  renderGrid(); renderStats()
+  if (activeRoomId && rooms.find(r => r.id === activeRoomId)) {
+    if (document.getElementById('detailOverlay').classList.contains('open'))
+      renderDetail(rooms.find(r => r.id === activeRoomId))
+  }
+}
+
+function updateViewers() {
+  const fmt = n => n != null ? Number(n).toLocaleString() : '—'
+  rooms.forEach(r => {
+    const row = document.querySelector(`.room-table tr[data-id="${r.id}"]`)
+    if (!row) return
+    const live = r.viewer_count != null && r.viewer_count > 0
+    const st = row.querySelector('.t-status')
+    if (st) { st.className = `t-status ${live ? 'live' : 'offline'}`; st.textContent = live ? 'LIVE' : 'OFF' }
+    const vc = row.querySelector('.t-viewer')
+    if (vc) { vc.innerHTML = `${fmt(r.viewer_count)}${viewerDelta(r)}`; vc.className = `t-num t-viewer ${live ? 'primary' : 'muted'}` }
+    const lc = row.querySelector('.t-like')
+    if (lc) lc.textContent = fmt(r.like_count)
+    const tc = row.querySelector('.t-timeup')
+    if (tc) tc.textContent = r.updated ? new Date(r.updated).toLocaleTimeString() : ''
+  })
+}
+
+function renderStats() {
+  const total = rooms.length
+  const live = rooms.filter(r => r.viewer_count != null && r.viewer_count > 0).length
+  const viewers = rooms.reduce((s, r) => s + (parseInt(r.viewer_count) || 0), 0)
+  document.getElementById('statsBar').innerHTML = `
+    <span class="stat-pill"><span class="room-color num">${total}</span> 房间</span>
+    <span class="stat-pill"><span class="live-color num">${live}</span> 直播</span>
+    <span class="stat-pill"><span class="viewer-color num">${viewers.toLocaleString()}</span> 在线</span>
+    <span class="sort-toggle ${sortMode === 'viewers' ? 'active' : ''}" onclick="toggleSort()">${sortMode === 'viewers' ? '✓' : '○'} 排序</span>
+  `
+}
+
+function toggleSort() {
+  sortMode = sortMode === 'viewers' ? 'manual' : 'viewers'
+  renderAll()
+}
+
+function sortedRooms() {
+  const pinned = rooms.filter(r => r.pinned)
+  const unpinned = rooms.filter(r => !r.pinned)
+  unpinned.sort((a, b) => {
+    const aLive = (parseInt(a.viewer_count) || 0) > 0 ? 1 : 0
+    const bLive = (parseInt(b.viewer_count) || 0) > 0 ? 1 : 0
+    if (bLive !== aLive) return bLive - aLive
+    if (sortMode === 'viewers') return (parseInt(b.viewer_count) || 0) - (parseInt(a.viewer_count) || 0)
+    return 0
+  })
+  return [...pinned, ...unpinned]
+}
+
+function renderGrid() {
+  const el = document.getElementById('roomGrid')
+  if (rooms.length === 0) {
+    document.getElementById('pagination').innerHTML = ''
+    el.innerHTML = `<div class="state-box">
+      <div class="icon">📡</div>
+      <h3>添加直播间</h3>
+      <p>输入房间号或直播链接开始监控</p>
+    </div>`
+    return
+  }
+  const ordered = sortedRooms()
+  const totalPages = Math.ceil(rooms.length / pageSize) || 1
+  if (currentPage > totalPages) currentPage = totalPages
+  const start = (currentPage - 1) * pageSize
+  const page = ordered.slice(start, start + pageSize)
+  const fmt = n => n != null ? Number(n).toLocaleString() : '—'
+
+  let rows = page.map((r, i) => {
+    const live = r.viewer_count != null && r.viewer_count > 0
+    return `<tr draggable="true" data-id="${r.id}"
+      ondragstart="onDragStart(event,'${r.id}')"
+      ondragend="onDragEnd(event)"
+      ondragover="onDragOver(event)"
+      ondrop="onDrop(event,'${r.id}')"
+      onclick="selectRoom('${r.id}')"
+      style="animation:row-in .3s ${i*0.03}s backwards">
+      <td><div style="display:flex;align-items:center;gap:4px"><span class="t-drag">⠿</span><div class="t-avatar"><img src="${r.avatar || ''}" onerror="this.style.display='none'"></div></div></td>
+      <td><div class="col-user"><div style="display:flex;align-items:center;gap:6px"><div><div class="t-name" onclick="event.stopPropagation();window.open('https://live.douyin.com/${r.id}','_blank')" style="cursor:pointer;">${r.nickname || r.id}</div><div class="t-id">#${r.id}</div></div>${r.pinned ? '<span style="color:var(--primary);font-size:11px;">📌</span>' : ''}</div></div></td>
+      <td><span class="t-status ${live ? 'live' : 'offline'}">${live ? 'LIVE' : 'OFF'}</span></td>
+      <td class="hide-mobile" style="color:var(--text-secondary);font-size:12px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:160px;">${r.title || '—'}</td>
+      <td><span class="t-num t-viewer ${live ? 'primary' : 'muted'}">${fmt(r.viewer_count)}${viewerDelta(r)}</span></td>
+      <td class="hide-mobile"><span class="t-num t-like amber">${fmt(r.like_count)}</span></td>
+      <td><div class="t-actions">
+        <button onclick="event.stopPropagation();togglePin('${r.id}')" style="${r.pinned ? 'color:var(--primary)' : ''}">📌</button>
+        <button onclick="event.stopPropagation();startEdit('${r.id}')">✏️</button>
+        <button onclick="event.stopPropagation();openGift('${r.id}')">🎁</button>
+        <button onclick="event.stopPropagation();openHistory('${r.id}')">📈</button>
+        <button class="del" onclick="event.stopPropagation();removeRoom('${r.id}')">🗑</button>
+        <span class="t-time t-timeup">${r.updated ? new Date(r.updated).toLocaleTimeString() : ''}</span>
+      </div></td>
+    </tr>`
+  }).join('')
+
+  el.innerHTML = `<table class="room-table">
+    <tr>
+      <th style="width:60px"></th>
+      <th>主播</th>
+      <th style="width:70px">状态</th>
+      <th style="width:100px" class="hide-mobile">标题</th>
+      <th style="width:90px">在线</th>
+      <th style="width:90px" class="hide-mobile">点赞</th>
+      <th style="width:140px">操作</th>
+    </tr>
+    ${rows}
+  </table>`
+
+  document.getElementById('pagination').innerHTML = totalPages > 1 ? `
+    <button onclick="goPage(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>‹ 上一页</button>
+    <span class="page-info">${currentPage} / ${totalPages}</span>
+    <button onclick="goPage(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>下一页 ›</button>
+  ` : ''
+}
+
+function toggleSort() {
+  sortMode = sortMode === 'viewers' ? 'manual' : 'viewers'
+  renderAll()
+}
+
+function togglePin(id) {
+  const r = rooms.find(x => x.id === id)
+  if (!r) return
+  r.pinned = r.pinned ? 0 : 1
+  fetch('/api/room/pin', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ id, pinned: r.pinned })
+  }).catch(() => {})
+  renderGrid()
+}
+
+function sortedRooms() {
+  const pinned = rooms.filter(r => r.pinned)
+  const unpinned = rooms.filter(r => !r.pinned)
+  unpinned.sort((a, b) => {
+    const aLive = (parseInt(a.viewer_count) || 0) > 0 ? 1 : 0
+    const bLive = (parseInt(b.viewer_count) || 0) > 0 ? 1 : 0
+    if (bLive !== aLive) return bLive - aLive
+    if (sortMode === 'viewers') return (parseInt(b.viewer_count) || 0) - (parseInt(a.viewer_count) || 0)
+    return 0
+  })
+  return [...pinned, ...unpinned]
+}
+
+function goPage(p) {
+  currentPage = Math.max(1, Math.min(p, Math.ceil(rooms.length / pageSize)))
+  renderGrid()
+}
+
+function onDragStart(e, id) {
+  dragId = id
+  e.target.classList.add('dragging')
+  e.dataTransfer.effectAllowed = 'move'
+}
+function onDragEnd(e) {
+  e.target.classList.remove('dragging')
+  document.querySelectorAll('.room-table tr.drag-over').forEach(el => el.classList.remove('drag-over'))
+  dragId = null
+}
+function onDragOver(e) {
+  e.preventDefault()
+  e.dataTransfer.dropEffect = 'move'
+  const tr = e.target.closest('tr')
+  if (tr) {
+    document.querySelectorAll('.room-table tr.drag-over').forEach(el => el.classList.remove('drag-over'))
+    tr.classList.add('drag-over')
+  }
+}
+function onDrop(e, targetId) {
+  e.preventDefault()
+  if (!dragId || dragId === targetId) return
+  const fromIdx = rooms.findIndex(r => r.id === dragId)
+  const toIdx = rooms.findIndex(r => r.id === targetId)
+  if (fromIdx < 0 || toIdx < 0) return
+  const [moved] = rooms.splice(fromIdx, 1)
+  rooms.splice(toIdx, 0, moved)
+  fetch('/api/room/reorder', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ ids: rooms.map(r => r.id) })
+  }).catch(() => {})
+  renderGrid()
+}
+
+function selectRoom(id) {
+  activeRoomId = id
+  const r = rooms.find(x => x.id === id)
+  if (!r) return
+  renderGrid()
+  renderDetail(r)
+  document.getElementById('detailOverlay').classList.add('open')
+}
+
+function closeDetail() {
+  document.getElementById('detailOverlay').classList.remove('open')
+}
+
+function renderDetail(r) {
+  const live = r.viewer_count != null && r.viewer_count > 0
+  const fmt = n => n != null ? Number(n).toLocaleString() : '—'
+  document.getElementById('detailHeader').innerHTML = `
+    <div class="detail-avatar"><img src="${r.avatar || ''}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 48 48%22><rect fill=%22%23e4e8f0%22 width=%2248%22 height=%2248%22/><text x=%2224%22 y=%2232%22 text-anchor=%22middle%22 fill=%22%2395a3bb%22 font-size=%2220%22>?</text></svg>'"></div>
+    <div class="detail-info">
+      <div class="name">${r.nickname || r.id} <button class="edit-btn" onclick="startEdit('${r.id}')">✏️</button></div>
+      <div class="sub">${live ? '🟢 直播中' : '⚫ 离线'} · 房间 ${r.id}${r.sec_uid ? ` · <a class="sec" href="https://www.douyin.com/user/${r.sec_uid}" target="_blank">抖音主页 ↗</a>` : ''}</div>
+    </div>
+    <button class="close-btn" onclick="closeDetail()">✕</button>
+  `
+  document.getElementById('detailMetrics').innerHTML = `
+    <div class="detail-metric"><div class="label">👁 在线人数</div><div class="value ${live ? 'online' : 'offline'}">${fmt(r.viewer_count)}${viewerDelta(r)}</div></div>
+    <div class="detail-metric"><div class="label">❤️ 点赞</div><div class="value likes">${fmt(r.like_count)}</div></div>
+    <div class="detail-metric"><div class="label">👥 粉丝</div><div class="value fans">${fmt(r.follower_count)}</div></div>
+  `
+  document.getElementById('detailActions').innerHTML = `
+    <button class="btn btn-outline" onclick="openGift('${r.id}')">🎁 礼物榜单</button>
+    <button class="btn btn-outline" onclick="openHistory('${r.id}')">📈 历史趋势</button>
+  `
+  document.getElementById('historyCount').textContent = `${(r.history || []).length} 个数据点`
+  renderTrendChart(r)
+}
+
+function renderTrendChart(r) {
+  const el = document.getElementById('trendChart')
+  if (!trendChart) trendChart = echarts.init(el)
+  const h = r.history || []
+  const times = h.map(p => new Date(p.time).toLocaleTimeString())
+  const vals = h.map(p => p.count)
+  trendChart.setOption({
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: 'rgba(255,255,255,0.96)',
+      borderColor: '#e4e9f2',
+      borderWidth: 1,
+      textStyle: { color: '#0c1427', fontSize: 12 },
+      padding: [10, 14],
+      formatter: p => `<div style="font-weight:600;margin-bottom:2px;">${p[0].axisValue}</div><div>在线: <b>${Number(p[0].value).toLocaleString()}</b></div>`
+    },
+    grid: { left: 44, right: 12, top: 8, bottom: 18 },
+    xAxis: {
+      type: 'category', data: times, boundaryGap: false,
+      axisLine: { lineStyle: { color: '#e4e9f2' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#95a3bb', fontSize: 9, fontFamily: 'JetBrains Mono' },
+      splitLine: { show: false },
+    },
+    yAxis: {
+      type: 'value', min: 0,
+      splitLine: { lineStyle: { color: '#f0f2f7', type: 'dashed' } },
+      axisLabel: { color: '#95a3bb', fontSize: 9, fontFamily: 'JetBrains Mono' },
+    },
+    series: [{
+      type: 'line', data: vals, smooth: true, symbol: 'none',
+      lineStyle: { color: '#2059e6', width: 2 },
+      areaStyle: {
+        color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{ offset: 0, color: 'rgba(32,89,230,0.10)' }, { offset: 1, color: 'rgba(32,89,230,0)' }] }
+      },
+    }]
+  }, true)
+  trendChart.resize()
+}
+
+function removeRoom(id) {
+  fetch(`/api/room/${id}`, { method: 'DELETE' }).catch(() => {})
+  ws.send(JSON.stringify({ type: 'remove', id }))
+  if (activeRoomId === id) { activeRoomId = null; closeDetail() }
+}
+
+function startEdit(id) {
+  const r = rooms.find(x => x.id === id)
+  const name = prompt('修改房间显示名称:', r.nickname || r.id)
+  if (name && name.trim()) {
+    fetch('/api/room/nickname', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id, nickname: name.trim() }) }).catch(() => {})
+    ws.send(JSON.stringify({ type: 'rename', id, nickname: name.trim() }))
+  }
+}
+
+document.getElementById('addBtn').onclick = () => {
+  const input = document.getElementById('roomInput')
+  if (!input.value.trim()) return
+  fetch('/api/room', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: input.value }) })
+    .then(r => r.json()).then(d => { if (d.id) { input.value = ''; activeRoomId = d.id } }).catch(() => {})
+}
+document.getElementById('roomInput').onkeydown = e => { if (e.key === 'Enter') document.getElementById('addBtn').click() }
+
+document.getElementById('detailOverlay').onclick = e => { if (e.target === e.currentTarget) closeDetail() }
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDetail(); closeGift(); closeHistory() } })
+
+let currentGiftRoomId = null, giftRefreshTimer = null, currentHistoryRoomId = null
+let historyData = null, historyTab = 'viewers'
+
+async function openGift(roomId) {
+  currentGiftRoomId = roomId
+  const r = rooms.find(x => x.id === roomId)
+  document.getElementById('giftRoomLabel').textContent = r && r.nickname ? `· ${r.nickname}` : ''
+  document.getElementById('giftDialog').classList.add('open')
+  document.getElementById('giftBody').innerHTML = `<div class="state-box loading"><div class="icon">🎁</div><h3>加载中...</h3></div>`
+  await fetchGiftRanking(roomId)
+  if (giftRefreshTimer) clearInterval(giftRefreshTimer)
+  giftRefreshTimer = setInterval(() => fetchGiftRanking(roomId), 30000)
+}
+
+const rankMedal = ['🥇','🥈','🥉']
+
+async function fetchGiftRanking(roomId) {
+  try {
+    const res = await fetch(`/api/ranking/${roomId}`)
+    const list = await res.json()
+    if (!list || list.length === 0) {
+      document.getElementById('giftBody').innerHTML = `<div class="state-box"><div class="icon">🎁</div><h3>暂无送礼数据</h3><p>该主播当前没有送礼记录，或暂未开播</p></div>`
+      return
+    }
+    document.getElementById('giftBody').innerHTML = `
+      <div style="font-size:10px;color:var(--muted);margin-bottom:10px;padding-left:2px;">点击用户跳转抖音主页</div>
+      <div class="gift-grid">
+      ${list.map((u, i) => {
+        const rankClass = i < 3 ? 'top'+(i+1) : 'normal'
+        const rankLabel = i < 3 ? rankMedal[i] : (i+1)
+        const genderSymbol = u.gender === 1 ? '♂' : u.gender === 2 ? '♀' : '—'
+        const fc = u.fans_club
+        const fcBadge = fc?.badge?.icons?.["2"]?.url_list?.[0] || fc?.badge?.icons?.["4"]?.url_list?.[0]
+        const levelIcon = u.user?.pay_grade?.new_im_icon_with_level?.url_list?.[0]
+        const levelLabel = levelIcon
+          ? `<img src="${levelIcon}" style="height:13px;vertical-align:middle;" title="荣誉等级 ${u.level}">`
+          : `<span class="g-level">Lv.${u.level}</span>`
+        const fcHtml = fcBadge
+          ? `<img src="${fcBadge}" style="height:15px;vertical-align:middle;margin-left:3px;" title="${fc.club_name} · 粉丝团${fc.level}级">`
+          : fc?.club_name ? `<span class="g-fc">${fc.club_name}</span>` : ''
+        return `<div class="gift-row" onclick="window.open('https://www.douyin.com/user/${u.sec_uid}', '_blank')" style="animation:row-in .25s ${i*0.025}s backwards">
+          <span class="rank ${rankClass}">${rankLabel}</span>
+          <div class="g-avatar"><img src="${u.avatar_url}" onerror="this.style.display='none'"></div>
+          <span class="g-name">${u.nickname}${fcHtml}</span>
+          <span style="display:flex;align-items:center;gap:3px;">${levelLabel}</span>
+          <span class="g-gender">${genderSymbol}</span>
+        </div>`
+      }).join('')}
+      </div>`
+  } catch {
+    document.getElementById('giftBody').innerHTML = `<div class="state-box"><div class="icon" style="background:rgba(239,68,68,0.1);color:var(--red);">⚠️</div><h3 style="color:var(--red);">获取失败</h3><p>无法加载礼物榜单，请稍后重试</p></div>`
+  }
+}
+
+async function refreshGift() {
+  if (!currentGiftRoomId) return
+  document.getElementById('giftBody').innerHTML = `<div class="state-box loading"><div class="icon">🎁</div><h3>加载中...</h3></div>`
+  await fetchGiftRanking(currentGiftRoomId)
+}
+
+function closeGift() {
+  document.getElementById('giftDialog').classList.remove('open')
+  if (giftRefreshTimer) { clearInterval(giftRefreshTimer); giftRefreshTimer = null }
+}
+
+function openHistory(roomId) {
+  currentHistoryRoomId = roomId
+  document.getElementById('historyDialog').classList.add('open')
+  const r = rooms.find(x => x.id === roomId)
+  const label = document.getElementById('historyRoomLabel')
+  if (label) label.textContent = r && r.nickname ? `· ${r.nickname}` : ''
+  const el = document.getElementById('historyChart')
+  if (historyChart) { historyChart.dispose(); historyChart = null }
+  el.innerHTML = `<div class="state-box loading"><div class="icon">📊</div><h3>加载中...</h3></div>`
+  fetch(`/api/history/${roomId}`).then(r => r.json()).then(h => {
+    if (!h || h.length < 2) {
+      el.innerHTML = `<div class="state-box"><div class="icon">📊</div><h3>数据不足</h3><p>等待下次采集获取足够的数据点</p></div>`
+      document.getElementById('historyTabs').style.display = 'none'
+      return
+    }
+    historyData = h
+    document.getElementById('historyTabs').style.display = 'flex'
+    renderHistoryChart()
+  }).catch(() => {
+    el.innerHTML = `<div class="state-box"><div class="icon" style="background:rgba(239,68,68,0.1);color:var(--red);">⚠️</div><h3 style="color:var(--red);">获取失败</h3><p>无法加载历史数据</p></div>`
+  })
+}
+
+function switchHistoryTab(tab) {
+  historyTab = tab
+  document.querySelectorAll('#historyTabs .tab-btn').forEach(b => b.classList.toggle('active', b.dataset.tab === tab))
+  renderHistoryChart()
+}
+
+function renderHistoryChart() {
+  const h = historyData
+  if (!h) return
+  const el = document.getElementById('historyChart')
+  if (historyChart) { historyChart.dispose(); historyChart = null }
+  setTimeout(() => {
+    if (!historyChart) historyChart = echarts.init(el)
+    const step = Math.max(1, Math.floor(h.length / 200))
+    const sampled = h.filter((_, i) => i % step === 0 || i === h.length - 1)
+    const times = sampled.map(p => new Date(p.time).toLocaleString())
+    const mins = Math.round((Date.now() - h[0].time) / 60000)
+    const isViewers = historyTab === 'viewers'
+    const vals = sampled.map(p => isViewers ? p.count : (p.like_count || 0))
+    const color = isViewers ? '#f43f5e' : '#f59e0b'
+    const name = isViewers ? '在线人数' : '点赞数'
+    const titleColor = isViewers ? '#2059e6' : '#f5a623'
+    historyChart.setOption({
+      title: {
+        text: `近 ${mins >= 60 ? (mins/60).toFixed(1)+' 小时' : mins+' 分钟'} · ${h.length} 个数据点`,
+        textStyle: { color: '#95a3bb', fontSize: 12, fontFamily: 'Plus Jakarta Sans', fontWeight: 500 },
+        left: 0, top: 0
+      },
+      tooltip: {
+        trigger: 'axis',
+        backgroundColor: 'rgba(255,255,255,0.96)',
+        borderColor: '#e4e9f2',
+        borderWidth: 1,
+        textStyle: { color: '#0c1427', fontSize: 12 },
+        padding: [10, 14],
+        formatter: p => `<div style="font-weight:600;margin-bottom:4px;">${p[0].axisValue}</div><div style="display:flex;justify-content:space-between;gap:20px;"><span><span style="display:inline-block;width:8px;height:8px;border-radius:50%;background:${color};margin-right:6px;"></span>${name}</span><b style="color:${color};">${Number(p[0].value).toLocaleString()}</b></div>`
+      },
+      grid: { left: 50, right: 16, top: 32, bottom: 20 },
+      xAxis: {
+        type: 'category', data: times, boundaryGap: false,
+        axisLine: { lineStyle: { color: '#e4e9f2' } }, axisTick: { show: false },
+        axisLabel: { color: '#95a3bb', fontSize: 9, fontFamily: 'JetBrains Mono', rotate: 40, interval: Math.max(0, Math.floor(times.length / 15) - 1) },
+        splitLine: { show: false },
+      },
+      yAxis: {
+        type: 'value',
+        splitLine: { lineStyle: { color: '#f0f2f7', type: 'dashed' } },
+        axisLabel: { color: '#95a3bb', fontSize: 9, fontFamily: 'JetBrains Mono', formatter: v => v >= 10000 ? (v/10000).toFixed(1)+'w' : v },
+      },
+      dataZoom: [{ type: 'inside', start: 0, end: 100, backgroundColor: 'transparent' }],
+      series: [{
+        name, type: 'line', data: vals, smooth: true, symbol: 'none',
+        lineStyle: { color, width: isViewers ? 2.5 : 1.5 },
+        areaStyle: { color: { type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [{ offset: 0, color: isViewers ? 'rgba(32,89,230,0.10)' : 'rgba(245,166,35,0.10)' }, { offset: 1, color: 'rgba(255,255,255,0)' }] } },
+        ...(isViewers ? {
+          markLine: { silent: true, symbol: 'none',
+            data: [{ type: 'average', name: '均值', label: { formatter: '均值 {c}', color: '#95a3bb', fontSize: 9 } }],
+            lineStyle: { color: '#95a3bb', type: 'dashed', width: 1 } }
+        } : {})
+      }],
+    }, true)
+    historyChart.resize()
+  }, 100)
+}
+
+function closeHistory() { document.getElementById('historyDialog').classList.remove('open') }
+
+window.addEventListener('resize', () => { if (trendChart) trendChart.resize(); if (historyChart) historyChart.resize() })
+document.getElementById('giftDialog').onclick = e => { if (e.target === e.currentTarget) closeGift() }
+document.getElementById('historyDialog').onclick = e => { if (e.target === e.currentTarget) closeHistory() }
+
+connect()
+</script>
+</body>
+</html>

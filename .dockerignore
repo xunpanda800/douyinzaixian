@@ -1,0 +1,9 @@
+node_modules
+.git
+.DS_Store
+logs/
+*.md
+start.sh
+requirements.txt
+PLAN.md
+public/old/
