@@ -55,22 +55,24 @@ function apiGet(pathname, query) {
   })
 }
 
-async function fetchViewerCount(webcastId, retries = 2) {
-  for (let i = 0; i <= retries; i++) {
+async function fetchViewerCount(webcastId) {
+  // Try primary API with retries
+  for (let i = 0; i <= 2; i++) {
     try {
       const data = await apiGet('/get_live_room_num', {
         webcast_id: webcastId, version: '187', platform: 'server'
       })
       const count = data?.data?.data?.data?.[0]?.room_view_stats?.display_value
-      if (count !== null && count !== undefined) return count
-    } catch (e) {
-      if (i < retries) {
-        await new Promise(r => setTimeout(r, 1000 * (i + 1)))
-      } else {
-        throw e
-      }
-    }
+      if (count !== null && count !== undefined && count !== 0) return count
+    } catch (e) {}
+    if (i < 2) await new Promise(r => setTimeout(r, 800 * (i + 1)))
   }
+  // Fallback: douyin.wtf API
+  try {
+    const data = await apiGetWtf('/api/douyin/web/fetch_user_live_videos', { webcast_id: webcastId })
+    const count = data?.data?.data?.data?.[0]?.room_view_stats?.display_value
+    if (count !== null && count !== undefined && count !== 0) return count
+  } catch {}
   return null
 }
 
@@ -119,15 +121,22 @@ async function poll() {
     const batch = entries.slice(i, i + CONCURRENCY)
     await Promise.allSettled(batch.map(async ([id, room]) => {
       try {
-        const count = await fetchViewerCount(id)
-        room.viewer_count = count
-        room.error = false
+        const rawCount = await fetchViewerCount(id)
+        const count = rawCount !== null ? parseInt(rawCount) : null
         room.updated = Date.now()
         if (room.offline_count === undefined) room.offline_count = 0
-        if (count !== null && parseInt(count) > 0) {
+        if (count !== null && count > 0) {
+          room.viewer_count = count
+          room.error = false
           room.offline_count = 0
           room.is_live = 1
+        } else if (count === 0 && room.offline_count < 5) {
+          // API says 0 but room was recently online — keep last good value
+          room.error = false
+          room.offline_count++
+          if (room.offline_count >= 10) room.is_live = 0
         } else {
+          if (count === null) room.error = true
           room.offline_count++
           if (room.offline_count >= 10) room.is_live = 0
         }
@@ -136,20 +145,21 @@ async function poll() {
           const now = Date.now()
           room.history.push({ time: now, count, like_count: room.like_count ?? 0, title: room.title || '' })
           if (room.history.length > HISTORY_MAX) room.history.shift()
-          db.addHistory(id, now, parseInt(count) || 0, room.like_count ?? 0, room.title || '')
+          db.addHistory(id, now, count, room.like_count ?? 0, room.title || '')
         }
       } catch {
         room.error = true
         room.updated = Date.now()
         if (room.offline_count === undefined) room.offline_count = 0
         room.offline_count++
+        room.viewer_count = null
         if (room.offline_count >= 10) room.is_live = 0
       }
     }))
   }
-  // Fetch room info for all rooms (with fallback only if viewer count fetch failed)
+  // Fetch room info for all rooms — also fills in viewer_count gaps
   for (const [id, room] of rooms) {
-    const needsFallback = room.viewer_count === null || room.viewer_count === undefined
+    const needsFallback = !room.viewer_count || room.viewer_count <= 0
     fetchRoomInfo(id, needsFallback).then(info => {
       if (!info) return
       if (info.like_count !== undefined) room.like_count = info.like_count
@@ -158,7 +168,12 @@ async function poll() {
       if (info.avatar) room.avatar = info.avatar
       if (info.room_id) room.room_id = info.room_id
       if (info.sec_uid) room.sec_uid = info.sec_uid
-      if (info.viewer_count !== null && needsFallback) room.viewer_count = info.viewer_count
+      if (info.viewer_count !== null && info.viewer_count > 0 && needsFallback) {
+        room.viewer_count = info.viewer_count
+        if (room.offline_count === undefined) room.offline_count = 0
+        room.offline_count = 0
+        room.is_live = 1
+      }
       db.updateRoom(id, room)
       db.updateLatestHistory(id, info.like_count ?? 0, info.title || '')
     })
