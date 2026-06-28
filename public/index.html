@@ -365,6 +365,43 @@ tr:hover .t-drag { opacity: .8; }
 
 #historyChart { width: 100%; height: 380px; }
 
+/* Analytics */
+.ana-grid { display: grid; gap: 8px; margin-bottom: 14px; }
+.ana-row { display: flex; gap: 8px; }
+.ana-card {
+  flex: 1; background: #f7f9fd; border-radius: var(--radius-sm);
+  padding: 10px 12px; border: 1px solid var(--border); min-width: 0;
+}
+.ana-card .lbl { font-size: 9px; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; margin-bottom: 2px; }
+.ana-card .val { font-family: var(--mono); font-weight: 700; font-size: 18px; line-height: 1.3; }
+.ana-card .sub { font-size: 10px; color: var(--muted); margin-top: 1px; }
+.ana-card .val.up { color: var(--red); }
+.ana-card .val.down { color: var(--green); }
+.ana-card .val.stable { color: var(--muted); }
+.ana-card .val.high { color: var(--primary); }
+.ana-card .val.low { color: var(--accent); }
+.ana-trend {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 10px;
+}
+.ana-trend.up { background: rgba(239,68,68,0.1); color: var(--red); }
+.ana-trend.down { background: var(--green-soft); color: var(--green); }
+.ana-trend.stable { background: #f0f2f7; color: var(--muted); }
+.ana-section { margin-bottom: 14px; }
+.ana-section h4 {
+  font-size: 10px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .6px; margin-bottom: 6px; font-weight: 600;
+}
+.ana-bar-bg { height: 6px; border-radius: 3px; background: #e4e9f2; overflow: hidden; margin-top: 4px; }
+.ana-bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+.ana-hour-grid { display: flex; gap: 6px; flex-wrap: wrap; }
+.ana-hour {
+  text-align: center; padding: 6px 10px; border-radius: var(--radius-sm);
+  background: #f0f2f7; min-width: 48px;
+}
+.ana-hour .h { font-size: 11px; color: var(--text-secondary); font-weight: 600; }
+.ana-hour .v { font-family: var(--mono); font-size: 12px; color: var(--primary); font-weight: 700; }
+
 /* Gift list */
 .gift-grid { display: grid; gap: 4px; }
 .gift-row {
@@ -516,6 +553,20 @@ tr:hover .t-drag { opacity: .8; }
   </div>
 </div>
 
+<!-- Analytics dialog -->
+<div class="overlay" id="analyticsDialog">
+  <div class="panel dialog-history" style="max-width:820px;">
+    <div class="panel-header">
+      <h3 style="font-weight:600;font-size:14px;flex:1;">📊 波动分析 <span id="analyticsRoomLabel" style="font-size:11px;color:var(--muted);font-weight:400;"></span></h3>
+      <div style="display:flex;gap:4px;">
+        <button class="close-btn" onclick="currentAnalyticsRoomId && openAnalytics(currentAnalyticsRoomId)" title="刷新">↻</button>
+        <button class="close-btn" onclick="closeAnalytics()">✕</button>
+      </div>
+    </div>
+    <div class="panel-body" id="analyticsBody"><div class="state-box loading"><div class="icon">📊</div><h3>加载中...</h3></div></div>
+  </div>
+</div>
+
 <script>
 const wsUrl = `${location.protocol === 'https:' ? 'wss:' : 'ws:'}//${location.host}`
 let ws, rooms = [], activeRoomId = null, trendChart = null, historyChart = null
@@ -664,6 +715,7 @@ function renderGrid() {
         <button onclick="event.stopPropagation();startEdit('${r.id}')">✏️</button>
         <button onclick="event.stopPropagation();openGift('${r.id}')">🎁</button>
         <button onclick="event.stopPropagation();openHistory('${r.id}')">📈</button>
+        <button onclick="event.stopPropagation();openAnalytics('${r.id}')">📊</button>
         <button class="del" onclick="event.stopPropagation();removeRoom('${r.id}')">🗑</button>
         <span class="t-time t-timeup">${r.updated ? new Date(r.updated).toLocaleTimeString() : ''}</span>
       </div></td>
@@ -862,7 +914,7 @@ document.getElementById('addBtn').onclick = () => {
 document.getElementById('roomInput').onkeydown = e => { if (e.key === 'Enter') document.getElementById('addBtn').click() }
 
 document.getElementById('detailOverlay').onclick = e => { if (e.target === e.currentTarget) closeDetail() }
-document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDetail(); closeGift(); closeHistory() } })
+document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDetail(); closeGift(); closeHistory(); closeAnalytics() } })
 
 let currentGiftRoomId = null, giftRefreshTimer = null, currentHistoryRoomId = null
 let historyData = null, historyTab = 'viewers'
@@ -1020,9 +1072,95 @@ function renderHistoryChart() {
 
 function closeHistory() { document.getElementById('historyDialog').classList.remove('open') }
 
+let currentAnalyticsRoomId = null
+
+async function openAnalytics(roomId) {
+  currentAnalyticsRoomId = roomId
+  const r = rooms.find(x => x.id === roomId)
+  const label = document.getElementById('analyticsRoomLabel')
+  if (label) label.textContent = r && r.nickname ? `· ${r.nickname}` : ''
+  document.getElementById('analyticsDialog').classList.add('open')
+  const body = document.getElementById('analyticsBody')
+  body.innerHTML = `<div class="state-box loading"><div class="icon">📊</div><h3>分析中...</h3></div>`
+  try {
+    const res = await fetch(`/api/analytics/${roomId}`)
+    const d = await res.json()
+    if (d.error) {
+      body.innerHTML = `<div class="state-box"><div class="icon">📊</div><h3>${d.error}</h3><p>需要至少 2 个有效数据点</p></div>`
+      return
+    }
+    renderAnalytics(body, d, r)
+  } catch {
+    body.innerHTML = `<div class="state-box"><div class="icon" style="background:rgba(239,68,68,0.1);color:var(--red);">⚠️</div><h3 style="color:var(--red);">获取失败</h3></div>`
+  }
+}
+
+function renderAnalytics(body, d, r) {
+  const fmt = n => (n ?? 0).toLocaleString()
+  const trendIcon = { up: '📈', down: '📉', stable: '➡️' }
+  const trendLabel = { up: '上升趋势', down: '下降趋势', stable: '平稳' }
+  const maxPct = d.avg > 0 ? Math.round((d.max - d.avg) / d.avg * 100) : 0
+  const minPct = d.avg > 0 ? Math.round((d.avg - d.min) / d.avg * 100) : 0
+
+  body.innerHTML = `
+    <div class="ana-grid">
+      <div class="ana-row">
+        <div class="ana-card"><div class="lbl">👁 当前在线</div><div class="val high">${fmt(d.current)}</div></div>
+        <div class="ana-card"><div class="lbl">📊 平均在线</div><div class="val high">${fmt(d.avg)}</div></div>
+        <div class="ana-card"><div class="lbl">⬆ 最高峰值</div><div class="val high">${fmt(d.max)}</div><div class="sub">${new Date(d.maxTime).toLocaleString()}</div></div>
+        <div class="ana-card"><div class="lbl">⬇ 最低峰值</div><div class="val low">${fmt(d.min)}</div><div class="sub">${new Date(d.minTime).toLocaleString()}</div></div>
+      </div>
+      <div class="ana-row">
+        <div class="ana-card"><div class="lbl">🌊 波动率 (CV)</div><div class="val ${d.cv > 30 ? 'up' : d.cv > 10 ? 'stable' : 'down'}">${d.cv}%</div><div class="sub">${d.cv > 30 ? '剧烈波动' : d.cv > 10 ? '正常波动' : '相对平稳'}</div></div>
+        <div class="ana-card"><div class="lbl">📐 标准差</div><div class="val high">${fmt(d.stddev)}</div></div>
+        <div class="ana-card"><div class="lbl">🕐 监控时长</div><div class="val" style="color:var(--text)">${d.totalMinutes >= 60 ? (d.totalMinutes/60).toFixed(1)+'h' : d.totalMinutes+'m'}</div><div class="sub">${fmt(d.totalPoints)} 个数据点</div></div>
+        <div class="ana-card"><div class="lbl">📡 直播占比</div><div class="val" style="color:var(--green)">${d.liveRatio}%</div><div class="ana-bar-bg"><div class="ana-bar-fill" style="width:${d.liveRatio}%;background:var(--green)"></div></div></div>
+      </div>
+    </div>
+
+    <div class="ana-section">
+      <h4>📈 趋势判断</h4>
+      <div class="ana-row">
+        <div class="ana-card" style="flex:1">
+          <div class="lbl">短期趋势 (最后 30 个数据点)</div>
+          <div><span class="ana-trend ${d.trend}">${trendIcon[d.trend]} ${trendLabel[d.trend]}</span> <span class="sub" style="margin-left:6px;">斜率: ${d.slope > 0 ? '+' : ''}${d.slope}/点</span></div>
+        </div>
+        <div class="ana-card" style="flex:1">
+          <div class="lbl">近期峰值 (最后 30 分钟)</div>
+          <div class="val high">${d.recentPeak != null ? fmt(d.recentPeak) : '—'}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="ana-section">
+      <h4>⚡ 变化量</h4>
+      <div class="ana-row">
+        ${Object.entries(d.deltas).map(([k, v]) => {
+          const cls = v > 0 ? 'up' : v < 0 ? 'down' : 'stable'
+          const sign = v > 0 ? '+' : ''
+          return `<div class="ana-card" style="flex:1"><div class="lbl">近 ${k}</div><div class="val ${cls}">${sign}${fmt(v)}</div></div>`
+        }).join('')}
+      </div>
+    </div>
+
+    <div class="ana-section">
+      <h4>⏰ 高峰时段</h4>
+      <div class="ana-hour-grid">
+        ${d.peakHours.map(p => `<div class="ana-hour"><div class="h">${String(p.h).padStart(2, '0')}:00</div><div class="v">${fmt(p.avg)}</div></div>`).join('')}
+      </div>
+    </div>
+  `
+}
+
+function closeAnalytics() {
+  document.getElementById('analyticsDialog').classList.remove('open')
+  currentAnalyticsRoomId = null
+}
+
 window.addEventListener('resize', () => { if (trendChart) trendChart.resize(); if (historyChart) historyChart.resize() })
 document.getElementById('giftDialog').onclick = e => { if (e.target === e.currentTarget) closeGift() }
 document.getElementById('historyDialog').onclick = e => { if (e.target === e.currentTarget) closeHistory() }
+document.getElementById('analyticsDialog').onclick = e => { if (e.target === e.currentTarget) closeAnalytics() }
 
 connect()
 </script>

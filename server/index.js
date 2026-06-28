@@ -220,6 +220,57 @@ app.get('/api/ranking/:roomId', async (req, res) => {
   } catch (e) { console.log('rank error', req.params.roomId, e.message); res.json([]) }
 })
 
+app.get('/api/analytics/:roomId', (req, res) => {
+  const history = db.loadHistory(req.params.roomId)
+  if (!history || history.length < 2) return res.json({ error: '数据不足' })
+
+  const counts = history.map(h => h.count).filter(c => c !== null && c > 0)
+  if (counts.length < 2) return res.json({ error: '数据不足' })
+
+  const n = counts.length, now = Date.now()
+  const current = counts[counts.length - 1]
+  const sum = counts.reduce((a, b) => a + b, 0)
+  const avg = Math.round(sum / n)
+  const max = Math.max(...counts)
+  const min = Math.min(...counts)
+  const maxTime = history[counts.indexOf(max)].time
+  const minTime = history[counts.indexOf(min)].time
+  const variance = counts.reduce((s, v) => s + (v - avg) ** 2, 0) / n
+  const stddev = Math.round(Math.sqrt(variance))
+  const cv = avg > 0 ? Math.round(stddev / avg * 100) : 0
+
+  const trendPts = Math.min(30, counts.length)
+  const recent = counts.slice(-trendPts)
+  const xM = (trendPts - 1) / 2, yM = recent.reduce((a, b) => a + b, 0) / trendPts
+  let num = 0, den = 0
+  for (let i = 0; i < trendPts; i++) { num += (i - xM) * (recent[i] - yM); den += (i - xM) ** 2 }
+  const slope = den ? Math.round(num / den * 100) / 100 : 0
+
+  const findVal = t => { const i = history.findLastIndex(h => h.time <= t); return i >= 0 ? counts[i] : null }
+  const windows = { '5min': 5, '15min': 15, '30min': 30 }
+  const deltas = {}
+  for (const [k, m] of Object.entries(windows)) deltas[k] = current - findVal(now - m * 60000)
+
+  const liveCount = counts.filter(c => c > 0).length
+  const liveRatio = Math.round(liveCount / counts.length * 100)
+
+  const buckets = {}
+  history.forEach(h => { if (h.count > 0) { const hh = new Date(h.time).getHours(); if (!buckets[hh]) buckets[hh] = { s: 0, c: 0 }; buckets[hh].s += h.count; buckets[hh].c++ } })
+  const peakHours = Object.entries(buckets).map(([h, d]) => ({ h: parseInt(h), avg: Math.round(d.s / d.c) })).sort((a, b) => b.avg - a.avg).slice(0, 5)
+
+  const recent30 = history.filter(h => h.time >= now - 30 * 60000).map(h => h.count).filter(c => c !== null)
+
+  res.json({
+    current, avg, max, maxTime, min, minTime, stddev, cv,
+    trend: slope > 0.5 ? 'up' : slope < -0.5 ? 'down' : 'stable',
+    slope, deltas, liveRatio,
+    totalPoints: n,
+    totalMinutes: Math.round((now - history[0].time) / 60000),
+    peakHours,
+    recentPeak: recent30.length ? Math.max(...recent30) : null,
+  })
+})
+
 app.get('/api/history/:roomId', (req, res) => {
   const history = db.loadHistory(req.params.roomId)
   res.json(history)
