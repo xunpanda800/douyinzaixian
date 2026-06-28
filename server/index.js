@@ -69,8 +69,8 @@ function signParams() {
   return { sign_qm: md5(md5(k)), sign_key: k, sign_t: t, no_live: '0' }
 }
 
-async function fetchRoomInfo(webcastId) {
-  for (const source of ['dyapi', 'wtf']) {
+async function fetchRoomInfo(webcastId, useFallback) {
+  for (const source of useFallback ? ['dyapi', 'wtf'] : ['dyapi']) {
     try {
       const data = source === 'dyapi'
         ? await apiGet('/api/douyin/web/fetch_user_live_videos', { webcast_id: webcastId, ...signParams() })
@@ -93,7 +93,7 @@ async function fetchRoomInfo(webcastId) {
         webcast_id: webcastId,
       }
     } catch (e) {
-      console.log(`fetchRoomInfo (${source}) error:`, e.message)
+      if (useFallback) console.log(`fetchRoomInfo (${source}) error:`, e.message)
     }
   }
   return null
@@ -115,7 +115,7 @@ async function poll() {
         db.addHistory(id, now, parseInt(count) || 0, room.like_count ?? 0, room.title || '')
       }
       // Fetch like_count, title, avatar asynchronously (don't block)
-      fetchRoomInfo(id).then(info => {
+      fetchRoomInfo(id, false).then(info => {
         if (!info) return
         if (info.like_count !== undefined) room.like_count = info.like_count
         if (info.title) room.title = info.title
@@ -159,7 +159,7 @@ async function addRoom(input) {
   rooms.set(id, room)
   db.insertRoom({ ...room, created_at: now, updated_at: now })
 
-  const info = await fetchRoomInfo(id)
+  const info = await fetchRoomInfo(id, true)
   if (info) {
     if (info.nickname) room.nickname = info.nickname
     if (info.avatar) room.avatar = info.avatar
