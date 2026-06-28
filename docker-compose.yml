@@ -1,6 +1,6 @@
 services:
   dy-viewer:
-    build: .
+    image: ghcr.io/xunpanda800/douyinzaixian:latest
     container_name: dy-live-viewer
     ports:
       - "3000:3000"
