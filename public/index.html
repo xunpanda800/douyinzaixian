@@ -260,98 +260,131 @@ tr:hover .t-drag { opacity: .7; }
 /* Overlays */
 .overlay {
   position: fixed; inset: 0;
-  background: rgba(26,22,18,0.5);
-  backdrop-filter: blur(4px);
   z-index: 200; display: none;
   align-items: center; justify-content: center;
 }
 .overlay.open { display: flex; }
 
+.overlay-bg {
+  position: fixed; inset: 0;
+  background: rgba(26,22,18,0.35);
+  z-index: -1;
+}
+
 .panel {
-  background: var(--surface); border-radius: 12px;
-  width: 92vw; max-height: 86vh;
+  background: var(--surface); border-radius: 14px;
+  width: 92vw; max-height: 88vh;
   overflow: hidden; display: flex; flex-direction: column;
-  animation: panel-in .25s cubic-bezier(.22,.68,0,1);
-  box-shadow: var(--shadow-lg);
+  animation: panel-in .3s cubic-bezier(.22,.68,0,1);
+  box-shadow: 0 8px 40px rgba(26,22,18,0.15), 0 1px 3px rgba(26,22,18,0.05);
 }
 
 @keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
-@keyframes panel-in { from { opacity: 0; transform: scale(.97) translateY(12px); } to { opacity: 1; transform: scale(1) translateY(0); } }
+@keyframes panel-in { from { opacity: 0; transform: translateY(20px) scale(.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
 @keyframes row-in { from { opacity: 0; transform: translateY(3px); } to { opacity: 1; transform: translateY(0); } }
 
 .panel-header {
   display: flex; align-items: center; gap: 10px;
-  padding: 14px 18px; border-bottom: 1px solid var(--border); flex-shrink: 0;
+  padding: 16px 20px; border-bottom: 1px solid var(--border); flex-shrink: 0;
 }
 .panel-header h3 {
   font-family: var(--display); font-size: 17px; font-weight: 400;
   color: var(--text);
 }
-.panel-body { padding: 14px 18px; overflow-y: auto; flex: 1; }
+.panel-body { padding: 16px 20px; overflow-y: auto; flex: 1; }
 
 .close-btn {
   background: none; border: none; color: var(--muted); cursor: pointer;
-  width: 26px; height: 26px; border-radius: 50%;
+  width: 28px; height: 28px; border-radius: 50%;
   display: flex; align-items: center; justify-content: center;
-  font-size: 14px; transition: all .15s; flex-shrink: 0;
+  font-size: 15px; transition: all .15s; flex-shrink: 0;
 }
 .close-btn:hover { color: var(--text); background: #ede6dd; }
 
 /* Detail panel */
-.detail-panel { max-width: 720px; }
-.detail-avatar {
-  width: 40px; height: 40px; border-radius: 50%;
+.detail-panel { max-width: 680px; }
+
+.detail-hero {
+  display: flex; align-items: center; gap: 16px;
+  padding: 20px 20px 16px;
+}
+.detail-hero-avatar {
+  width: 56px; height: 56px; border-radius: 50%;
   overflow: hidden; flex-shrink: 0;
-  border: 1.5px solid var(--border); background: #e8e0d6;
+  border: 2px solid var(--border); background: #e8e0d6;
+  box-shadow: 0 2px 8px rgba(26,22,18,0.08);
 }
-.detail-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.detail-info { flex: 1; min-width: 0; }
-.detail-info .name {
-  font-family: var(--font); font-weight: 600; font-size: 14px;
-  display: flex; align-items: center; gap: 5px;
+.detail-hero-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.detail-hero-info { flex: 1; min-width: 0; }
+.detail-hero-info .name {
+  font-family: var(--display); font-weight: 500; font-size: 18px;
+  display: flex; align-items: center; gap: 6px;
 }
-.detail-info .name .edit-btn {
-  font-size: 10px; color: var(--muted); cursor: pointer;
-  background: none; border: none; padding: 1px 4px;
-  border-radius: 3px; transition: all .15s;
+.detail-hero-info .name .edit-btn {
+  font-size: 11px; color: var(--muted); cursor: pointer;
+  background: none; border: none; padding: 2px 5px;
+  border-radius: 4px; transition: all .15s;
 }
-.detail-info .name .edit-btn:hover { color: var(--primary); background: var(--primary-soft); }
-.detail-info .sub { font-size: 10px; color: var(--text-secondary); margin-top: 1px; }
-.detail-info .sub .sec { color: var(--primary); text-decoration: none; font-weight: 500; }
+.detail-hero-info .name .edit-btn:hover { color: var(--primary); background: var(--primary-soft); }
+.detail-hero-info .sub {
+  font-size: 11px; color: var(--text-secondary); margin-top: 2px;
+  display: flex; align-items: center; gap: 8px;
+}
+.detail-hero-info .sub .sec { color: var(--primary); text-decoration: none; font-weight: 500; }
+.detail-hero .status-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 3px 10px; border-radius: 20px;
+  font-size: 10px; font-weight: 600; letter-spacing: .3px;
+}
+.detail-hero .status-badge.live {
+  background: rgba(199,61,48,0.1); color: var(--primary);
+}
+.detail-hero .status-badge.offline {
+  background: #ede6dd; color: var(--muted);
+}
+.detail-hero .status-badge .dot {
+  width: 5px; height: 5px; border-radius: 50%; display: inline-block;
+}
+.detail-hero .status-badge.live .dot { background: var(--primary); animation: pulse-dot 1.5s infinite; }
+.detail-hero .status-badge.offline .dot { background: var(--muted); }
+@keyframes pulse-dot { 0%,100% { opacity: 1; } 50% { opacity: .3; } }
 
 .detail-metrics {
-  display: grid; grid-template-columns: repeat(3, 1fr);
-  gap: 6px; margin-bottom: 14px;
+  display: grid; grid-template-columns: repeat(4, 1fr);
+  gap: 8px; padding: 0 20px 16px;
 }
 .detail-metric {
   background: #f6f1eb; border-radius: var(--radius-sm);
-  padding: 8px 10px;
+  padding: 10px 12px;
 }
 .detail-metric .label {
-  font-size: 8px; color: var(--muted); text-transform: uppercase;
-  letter-spacing: .6px; margin-bottom: 2px;
+  font-size: 9px; color: var(--muted); text-transform: uppercase;
+  letter-spacing: .5px; margin-bottom: 4px;
 }
 .detail-metric .value {
-  font-family: var(--mono); font-weight: 500; font-size: 18px; line-height: 1.2;
+  font-family: var(--mono); font-weight: 500; font-size: 20px; line-height: 1.2;
 }
 .detail-metric .value.online { color: var(--primary); }
 .detail-metric .value.likes { color: var(--amber); }
 .detail-metric .value.fans { color: var(--accent); }
 .detail-metric .value.offline { color: var(--muted); }
 
-.detail-actions { display: flex; gap: 5px; margin-bottom: 14px; }
+.detail-actions {
+  display: flex; gap: 5px; padding: 0 20px 14px; flex-wrap: wrap;
+}
 .detail-actions button { font-size: 11px; padding: 5px 12px; }
 
 .detail-chart {
+  margin: 0 20px 16px;
   background: #f6f1eb; border-radius: var(--radius-sm);
-  padding: 12px;
+  padding: 14px;
 }
 .detail-chart .chart-header {
-  display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+  display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;
 }
 .detail-chart .chart-header h3 {
   font-family: var(--font); font-size: 10px; color: var(--text-secondary);
-  font-weight: 500; letter-spacing: .5px; text-transform: uppercase;
+  font-weight: 600; letter-spacing: .5px; text-transform: uppercase;
 }
 #trendChart { width: 100%; height: 180px; }
 
@@ -471,8 +504,14 @@ tr:hover .t-drag { opacity: .7; }
   .hide-mobile { display: none; }
   .dialog-gift { max-width: 96vw; }
   .dialog-history { max-width: 96vw; }
-  .detail-panel { max-width: 96vw; border-radius: 10px; max-height: 90vh; }
+  .detail-panel { max-width: 96vw; border-radius: 12px; max-height: 90vh; }
   .detail-metrics { grid-template-columns: 1fr 1fr; }
+  .detail-hero { padding: 16px 16px 12px; gap: 12px; }
+  .detail-hero-avatar { width: 46px; height: 46px; }
+  .detail-hero-info .name { font-size: 16px; }
+  .detail-metrics { padding: 0 16px 12px; grid-template-columns: 1fr 1fr; }
+  .detail-actions { padding: 0 16px 12px; }
+  .detail-chart { margin: 0 16px 12px; }
 }
 @media (max-width: 480px) {
   .header-stats { gap: 3px; }
@@ -513,18 +552,21 @@ tr:hover .t-drag { opacity: .7; }
 
 <!-- Detail overlay -->
 <div class="overlay" id="detailOverlay">
-  <div class="detail-panel">
-    <div class="panel-header" id="detailHeader"></div>
-    <div class="panel-body">
-      <div class="detail-metrics" id="detailMetrics"></div>
-      <div class="detail-actions" id="detailActions"></div>
-      <div class="detail-chart">
-        <div class="chart-header">
-          <h3>在线人数趋势</h3>
-          <span id="historyCount" style="font-size:11px;color:var(--muted);font-family:'JetBrains Mono',monospace;"></span>
-        </div>
-        <div id="trendChart"></div>
+  <div class="overlay-bg" onclick="closeDetail()"></div>
+  <div class="detail-panel panel">
+    <div style="display:flex;align-items:center;justify-content:space-between;padding:4px 8px 0 20px;flex-shrink:0">
+      <div style="font-size:9px;color:var(--muted);letter-spacing:.5px;text-transform:uppercase">主播详情</div>
+      <button class="close-btn" onclick="closeDetail()" style="font-size:16px">✕</button>
+    </div>
+    <div class="detail-hero" id="detailHero"></div>
+    <div class="detail-metrics" id="detailMetrics"></div>
+    <div class="detail-actions" id="detailActions"></div>
+    <div class="detail-chart">
+      <div class="chart-header">
+        <h3>在线人数趋势</h3>
+        <span id="historyCount" style="font-size:10px;color:var(--muted);font-family:'JetBrains Mono',monospace;"></span>
       </div>
+      <div id="trendChart"></div>
     </div>
   </div>
 </div>
@@ -868,18 +910,24 @@ function closeDetail() {
 function renderDetail(r) {
   const live = r.is_live
   const fmt = n => n != null ? Number(n).toLocaleString() : '—'
-  document.getElementById('detailHeader').innerHTML = `
-    <div class="detail-avatar"><img src="${r.avatar || ''}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 48 48%22><rect fill=%22%23e4e8f0%22 width=%2248%22 height=%2248%22/><text x=%2224%22 y=%2232%22 text-anchor=%22middle%22 fill=%22%2395a3bb%22 font-size=%2220%22>?</text></svg>'"></div>
-    <div class="detail-info">
+  const avatarHtml = r.avatar
+    ? `<img src="${r.avatar}" onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 48 48%22><rect fill=%22%23e4e8f0%22 width=%2248%22 height=%2248%22/><text x=%2224%22 y=%2232%22 text-anchor=%22middle%22 fill=%22%2395a3bb%22 font-size=%2220%22>?</text></svg>'">`
+    : `<div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#95a3bb;font-size:22px;background:#e4e8f0">?</div>`
+  document.getElementById('detailHero').innerHTML = `
+    <div class="detail-hero-avatar">${avatarHtml}</div>
+    <div class="detail-hero-info">
       <div class="name">${r.nickname || r.id} <button class="edit-btn" onclick="startEdit('${r.id}')">✏️</button></div>
-      <div class="sub">${live ? '🟢 直播中' : '⚫ 离线'} · 房间 ${r.id}${r.sec_uid ? ` · <a class="sec" href="https://www.douyin.com/user/${r.sec_uid}" target="_blank">抖音主页 ↗</a>` : ''}</div>
+      <div class="sub">
+        <span class="status-badge ${live ? 'live' : 'offline'}"><span class="dot"></span>${live ? '直播中' : '离线'}</span>
+        <span>#${r.id}</span>
+        ${r.sec_uid ? `<a class="sec" href="https://www.douyin.com/user/${r.sec_uid}" target="_blank">抖音主页 ↗</a>` : ''}
+      </div>
     </div>
-    <button class="close-btn" onclick="closeDetail()">✕</button>
   `
   document.getElementById('detailMetrics').innerHTML = `
     <div class="detail-metric"><div class="label">👁 在线人数</div><div class="value ${live ? 'online' : 'offline'}">${fmt(r.viewer_count)}${viewerDelta(r)}</div></div>
     <div class="detail-metric"><div class="label">❤️ 点赞</div><div class="value likes">${fmt(r.like_count)}</div></div>
-    <div class="detail-metric"><div class="label">👥 粉丝</div><div class="value fans">${fmt(r.follower_count)}</div></div>
+    <div class="detail-metric"><div class="label">👥 粉丝</div><div class="value fans">${r.follower_count ? fmt(r.follower_count) : '—'}</div></div>
     <div class="detail-metric"><div class="label">🎬 累积场观</div><div class="value fans">${r.total_viewers ? fmt(r.total_viewers) : '—'}</div></div>
   `
   document.getElementById('detailActions').innerHTML = `
@@ -1007,7 +1055,7 @@ document.getElementById('addBtn').onclick = () => {
 }
 document.getElementById('roomInput').onkeydown = e => { if (e.key === 'Enter') document.getElementById('addBtn').click() }
 
-document.getElementById('detailOverlay').onclick = e => { if (e.target === e.currentTarget) closeDetail() }
+// detailOverlay closes via overlay-bg click
 document.addEventListener('keydown', e => { if (e.key === 'Escape') { closeDetail(); closeGift(); closeHistory(); closeAnalytics() } })
 
 let currentGiftRoomId = null, giftRefreshTimer = null, currentHistoryRoomId = null
